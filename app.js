@@ -474,7 +474,8 @@
       <div class="actions"><button class="btn go" data-act="saveCfg">Guardar</button></div></div>
       <div class="card"><h2>Cuadros finales</h2><p class="muted small">Fija la clasificación al terminar la fase de retos. Después marca los ganadores en la pestaña Cuadros.</p>
         <div class="row"><button class="btn go" data-act="freeze" data-on="1">Fijar clasificación final</button><button class="btn danger" data-act="freeze" data-on="0">Liberar</button></div></div>
-      <div class="card"><h2>Cambiar clave del juez</h2><label>Nueva clave (mínimo 8 caracteres)</label><input id="newPwd" type="text" autocomplete="off">
+      <div class="card"><h2>Clave del juez</h2><label for="curPwd">Clave con la que has entrado</label><div class="pwrow"><input id="curPwd" type="password" readonly value="${esc(adminPwd)}"><button class="btn" type="button" data-act="togglePwd" data-target="curPwd" aria-controls="curPwd">Ver</button></div>
+        <label for="newPwd" style="margin-top:16px">Nueva clave (mínimo 8 caracteres)</label><input id="newPwd" type="text" autocomplete="off">
         <div class="actions"><button class="btn go" data-act="changePwd">Cambiar</button><button class="btn" data-act="adminOut">Salir del modo juez</button></div></div>`;
   }
 
@@ -567,13 +568,18 @@
     // juez
     adminEntry() {
       if (adminPwd) { ui.tab = 'adm'; render(); return; }
-      sheet(`<h2>Zona del juez</h2><label>Clave de administración</label><input id="aPwd" type="password" autocomplete="current-password"><div class="actions">${cancel}<button class="btn go" data-act="adminLogin">Entrar</button></div>`);
+      sheet(`<h2>Zona del juez</h2><label for="aPwd">Clave de administración</label><div class="pwrow"><input id="aPwd" type="password" autocomplete="current-password"><button class="btn" type="button" data-act="togglePwd" data-target="aPwd" aria-controls="aPwd">Ver</button></div><div class="actions">${cancel}<button class="btn go" data-act="adminLogin">Entrar</button></div>`);
     },
     async adminLogin() {
       const pwd = $('#aPwd').value, r = await rpc('tenis_admin', { p_pwd: pwd, p_op: 'login', p_args: {} }).catch(() => ({ error: 'Sin conexión' }));
       if (r.error) return toast(esc(r.error), 'err');
       adminPwd = pwd; try { sessionStorage.setItem('hegemon.admin', pwd); } catch (e) { /* */ }
       closeSheet(); ui.tab = 'adm'; await refresh(true); render();
+    },
+    togglePwd(el) {
+      const inp = document.getElementById(el.dataset.target); if (!inp) return;
+      const show = inp.type === 'password'; inp.type = show ? 'text' : 'password'; el.textContent = show ? 'Ocultar' : 'Ver';
+      el.setAttribute('aria-pressed', String(show));
     },
     adminOut() { adminPwd = null; A = null; try { sessionStorage.removeItem('hegemon.admin'); } catch (e) { /* */ } ui.tab = 'home'; render(); },
     setDay(el) { adm('config', { challengeDay: Number(el.dataset.v) }, Number(el.dataset.v) ? 'Retos abiertos' : 'Retos cerrados'); },

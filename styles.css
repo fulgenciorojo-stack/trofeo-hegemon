@@ -273,3 +273,5 @@ nav button[aria-current="true"]:hover .ico { transform: scale(1.5) translateY(-3
 .intro-ring { position: fixed; z-index: 95; width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 3px solid var(--ball); border-radius: 50%; pointer-events: none; animation: ring .85s ease-out forwards; }
 @keyframes ring { from { transform: scale(.6); opacity: .95; } to { transform: scale(4.2); opacity: 0; } }
 .ball.landed { animation: bob 2.6s ease-in-out infinite; }
+
+.pwrow { display: flex; gap: 8px; align-items: stretch; } .pwrow input { flex: 1; min-width: 0; } .pwrow .btn { min-width: 84px; }
