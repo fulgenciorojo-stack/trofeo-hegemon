@@ -337,6 +337,29 @@
       ${body ? `<div class="body">${body}</div>` : ''}</div>`;
   }
 
+
+  // Trofeos del podio: oro, plata y bronce con degradado metálico
+  const PODIUM = [
+    { n: 1, stops: ['#fff3b0', '#f5c542', '#a86d00'], ink: '#4a2f00', glow: 'rgba(245,197,66,.55)' },
+    { n: 2, stops: ['#ffffff', '#c3ccd2', '#6c7882'], ink: '#26323a', glow: 'rgba(200,210,220,.4)' },
+    { n: 3, stops: ['#ffd9b0', '#d08a4a', '#7a4416'], ink: '#3c1f08', glow: 'rgba(208,138,74,.45)' },
+  ];
+  function podiumTrophy(i) {
+    const t = PODIUM[i], id = 'pg' + t.n, size = i === 0 ? 84 : 66;
+    return `<svg class="ptro" viewBox="0 0 64 64" width="${size}" height="${size}" style="filter: drop-shadow(0 6px 14px ${t.glow})" aria-label="Puesto ${t.n}">
+      <defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${t.stops[0]}"/><stop offset=".5" stop-color="${t.stops[1]}"/><stop offset="1" stop-color="${t.stops[2]}"/></linearGradient></defs>
+      <path d="M17 13H8.5v3.4a10.5 10.5 0 0 0 9.6 10.4M47 13h8.5v3.4a10.5 10.5 0 0 1-9.6 10.4" fill="none" stroke="url(#${id})" stroke-width="4" stroke-linecap="round"/>
+      <path d="M16 6h32v18a16 16 0 0 1-32 0V6Z" fill="url(#${id})"/>
+      <path d="M20 9h6v14.5c0 5 2.2 8 5 9.7-6-.4-11-4.6-11-12.3V9Z" fill="#fff" fill-opacity=".38"/>
+      <path d="M29 40h6v6h-6z" fill="url(#${id})"/>
+      <path d="M22 46h20l3 5H19l3-5Z" fill="url(#${id})"/>
+      <rect x="15" y="51" width="34" height="7" rx="2.5" fill="url(#${id})"/>
+      <rect x="15" y="51" width="34" height="2.4" rx="1.2" fill="#fff" fill-opacity=".35"/>
+      <text x="32" y="26" text-anchor="middle" font-weight="900" font-size="19" fill="${t.ink}" style="font-family:var(--display)">${t.n}</text>
+      <path d="M32 11.2l1.3 2.7 3 .4-2.2 2.1.5 3-2.6-1.4-2.6 1.4.5-3-2.2-2.1 3-.4 1.3-2.7Z" fill="#fff" fill-opacity=".0"/>
+    </svg>`;
+  }
+
   // --- Ranking
   function vRank() {
     const q = ui.filter.trim().toLowerCase();
@@ -345,7 +368,7 @@
     const badges = (p) => (S.config.challengeDay === 1 && pchd.has(p.id) ? '<span class="badge p" title="Retado el periodo anterior">P</span>' : '') + (p.down ? '<span class="badge">🔽</span>' : '') +
       (p.blocked ? '<span class="badge">⛔ no retable</span>' : '') + (p.rp ? '<span class="badge">🛡️ RP</span>' : '');
     const top = S.players.slice(0, 3);
-    const podium = !q && top.length === 3 ? `<div class="podium">${[1, 0, 2].map((i) => { const p = top[i]; return `<div class="pod g${i + 1} ${isMe(p.id) ? 'me' : ''}" data-flip="${p.id}"><div class="medal">${['🥇', '🥈', '🥉'][i]}</div><div class="num">${p.pos}</div><div class="n">${esc(p.name)}</div>${inChal[p.id] ? '<div class="small" style="color:var(--clay)">⚔️ en reto</div>' : ''}</div>`; }).join('')}</div>` : '';
+    const podium = !q && top.length === 3 ? `<div class="podium">${[1, 0, 2].map((i) => { const p = top[i]; return `<div class="pod g${i + 1} ${isMe(p.id) ? 'me' : ''}" data-flip="${p.id}"><div class="medal">${podiumTrophy(i)}</div><div class="num">${p.pos}</div><div class="n">${esc(p.name)}</div>${inChal[p.id] ? '<div class="small" style="color:var(--clay)">⚔️ en reto</div>' : ''}</div>`; }).join('')}</div>` : '';
     let rows = '', lastZone = -1;
     S.players.forEach((p) => {
       if (!q && p.pos <= 3) return;

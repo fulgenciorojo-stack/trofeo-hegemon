@@ -368,3 +368,8 @@ textarea.cmt { min-height: 110px; resize: vertical; }
 .news-side.a { background: linear-gradient(135deg, #3b7d66, #1e4a3b); }
 .news-side.a.w { background: linear-gradient(135deg, #eaff68, #c3e62c); }
 .news-side.b:not(.w) { background: linear-gradient(225deg, #7a5bbd, #3a2870); }
+
+/* podio: trofeos metálicos */
+.pod .medal { line-height: 0; margin-bottom: 4px; display: block !important; }
+.pod.g1 .ptro { animation: floaty 3.2s ease-in-out infinite; } .pod.g2 .ptro, .pod.g3 .ptro { animation: floaty 3.8s ease-in-out infinite; }
+@keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
