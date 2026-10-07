@@ -396,8 +396,18 @@
     const sorted = cs.slice().sort((x, y) => (inMine(y) - inMine(x)) || (order[x.status] - order[y.status]));
     const hint = !me ? '<div class="note" style="margin-bottom:12px">👋 Entra con tu PIN para apuntar el resultado de tu reto. <button class="btn sm go" data-act="who">Entrar</button></div>' : '';
     return `<div class="row between" style="padding:0 4px 10px"><h2 style="font-size:28px">Periodo ${S.period.n} · ${cs.filter((c) => c.status !== 'anulado').length} retos</h2></div>
-      ${hint}<div class="grid">${sorted.map((c) => duelCard(c, !!inMine(c))).join('')}</div>`;
+      ${hint}<div class="searchbar"><input id="dq" type="search" placeholder="Buscar un reto por jugador…" value="${esc(ui.dq || '')}" autocomplete="off"></div><div id="duelGrid">${duelGrid()}</div>`;
   }
+  function duelGrid() {
+    const q = norm((ui.dq || '').trim()), inMine = (c) => me && (c.a === me.id || c.b === me.id);
+    const order = { pendiente: 0, jugado: 1, noPuede: 2, sinResultado: 3, anulado: 4 };
+    const list = S.challenges.slice().sort((x, y) => (inMine(y) - inMine(x)) || (order[x.status] - order[y.status])).filter((c) => !q || norm(nm(c.a) + ' ' + nm(c.b) + ' ' + (c.score || '')).includes(q));
+    return list.length ? `<div class="grid">${list.map((c) => duelCard(c, !!inMine(c))).join('')}</div>` : `<div class="card empty"><h2>Sin resultados</h2><p>No hay retos con «${esc(ui.dq.trim())}».</p></div>`;
+  }
+  document.addEventListener('input', (e) => {
+    if (e.target.id !== 'dq') return;
+    ui.dq = e.target.value; const f = document.getElementById('duelGrid'); if (f) f.innerHTML = duelGrid();
+  });
 
   // --- Cuadros
   // Los cuadros se abren al final de la temporada, cuando el juez fija la clasificación final (el juez los ve siempre)
