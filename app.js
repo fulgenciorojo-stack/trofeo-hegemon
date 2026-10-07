@@ -87,7 +87,7 @@
     const ca = p.cantChallengeUntil || p.cant_challenge_until, cb = p.cantBeChallengedUntil || p.cant_be_challenged_until, a = future(ca), b = future(cb);
     if (a && b) return { k: 'espera', icon: '⏳', label: 'Esperando', until: new Date(Math.min(+new Date(ca), +new Date(cb))).toISOString(), tip: 'No puede retar ni ser retado' };
     if (!a && b) return { k: 'protegido', icon: '🛡️', label: 'Protegido', until: cb, tip: 'Puede retar, pero nadie puede retarle todavía' };
-    if (a && !b) return { k: 'retable', icon: '🎯', label: 'Retable', until: ca, tip: 'Puede ser retado, pero aún no puede retar' };
+    if (a && !b) return { k: 'retable', icon: '🟣', label: 'Retable', until: ca, tip: 'Puede ser retado, pero aún no puede retar' };
     return { k: 'libre', icon: '🟢', label: 'Libre', until: null, tip: 'Puede retar y ser retado' };
   }
   const stageLine = (st) => (st.k === 'libre' ? '' : `${st.icon} ${st.label} · hasta ${fmtTs(st.until)}`);
@@ -257,7 +257,14 @@
     });
   }
 
+  function msToNextRefresh(h) {
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(now()));
+    const g = (t) => Number(parts.find((p) => p.type === t).value);
+    let d = h * 3600 - (g('hour') * 3600 + g('minute') * 60 + g('second')); if (d <= 0) d += 86400; return d * 1000;
+  }
+  const fmtLeft = (ms) => { const hh = Math.floor(ms / 36e5), m = Math.floor(ms / 6e4) % 60; return hh > 0 ? `${hh} h ${m} min` : `${m} min`; };
   function tickCountdowns() {
+    document.querySelectorAll('[data-nextrefresh]').forEach((el) => { el.textContent = fmtLeft(msToNextRefresh(Number(el.dataset.nextrefresh))); });
     document.querySelectorAll('[data-countdown]').forEach((el) => { el.textContent = countdown(el.dataset.countdown); });
   }
 
@@ -268,7 +275,8 @@
     const pending = active.filter((c) => c.status === 'pendiente').length;
     const live = isLive();
     const status = `<span class="status ${open ? 'open' : ''}"><i></i>${live ? (open ? 'Ranking vivo · retos abiertos' : 'Retos en pausa') : open ? `Retos abiertos · ${day === 3 ? 'pueden retar todos' : 'día ' + day}` : 'Retos cerrados'}</span>`;
-    const cd = live ? `<div class="small muted" style="margin-top:8px">El ranking se actualiza en cuanto se apunta cada resultado. Plazo para jugar un reto: ${S.config.challengeDays} días.</div>` : `<div class="small muted" style="margin-top:8px">⏱ Fin del periodo: <b data-countdown="${S.period.deadline}">${countdown(S.period.deadline)}</b> · ${esc(fmtDeadline(S.period.deadline))}</div>`;
+    const rh = S.config.refreshHour == null ? 7 : S.config.refreshHour, rhs = String(rh).padStart(2, '0') + ':00';
+    const cd = live ? `<div class="small muted" style="margin-top:8px">El ranking se mueve en cuanto se apunta cada resultado. Las esperas y fases de los jugadores se renuevan cada día a las ${rhs} · próxima actualización en <b data-nextrefresh="${rh}">${fmtLeft(msToNextRefresh(rh))}</b>. Plazo para jugar un reto: ${S.config.challengeDays} días.</div>` : `<div class="small muted" style="margin-top:8px">⏱ Fin del periodo: <b data-countdown="${S.period.deadline}">${countdown(S.period.deadline)}</b> · ${esc(fmtDeadline(S.period.deadline))}</div>`;
     let hero;
     if (mp) {
       const mc = myChal();
@@ -350,7 +358,7 @@
     const c0 = S.config, hr = String(c0.refreshHour == null ? 7 : c0.refreshHour).padStart(2, '0') + ':00';
     const legend = isLive() ? `<details class="legend card"><summary>ℹ️ Qué significan los símbolos</summary>
       <p class="small muted" style="margin:8px 0">Al apuntarse un resultado el ranking se mueve al instante y cada jugador pasa por estas fases. Se renuevan cada día a las ${hr}.</p>
-      <ul class="legend-list"><li><b>⏳ Esperando</b> · ${c0.waitBoth} días: no puede retar ni ser retado.</li><li><b>🛡️ Protegido</b> · el ganador, ${c0.winnerDays} días más: puede retar, pero nadie puede retarle.</li><li><b>🎯 Retable</b> · el perdedor, ${c0.loserDays} días más: pueden retarle, pero aún no puede retar.</li><li><b>🟢 Libre</b> · puede retar y ser retado.</li><li><b>⚔️ En reto</b> · tiene un reto en juego.</li></ul></details>` : '';
+      <ul class="legend-list"><li><b>⏳ Esperando</b> · ${c0.waitBoth} días: no puede retar ni ser retado.</li><li><b>🛡️ Protegido</b> · el ganador, ${c0.winnerDays} días más: puede retar, pero nadie puede retarle.</li><li><b>🟣 Retable</b> · el perdedor, ${c0.loserDays} días más: pueden retarle, pero aún no puede retar.</li><li><b>🟢 Libre</b> · puede retar y ser retado.</li><li><b>⚔️ En reto</b> · tiene un reto en juego.</li></ul></details>` : '';
     return legend + `<div class="card" style="padding:12px"><input type="search" id="filter" placeholder="🔎 Buscar jugador…" value="${esc(ui.filter)}" data-input="filter"></div>${podium}${rows || '<div class="empty">Sin resultados</div>'}`;
   }
 
