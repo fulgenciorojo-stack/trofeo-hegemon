@@ -275,3 +275,7 @@ nav button[aria-current="true"]:hover .ico { transform: scale(1.5) translateY(-3
 .ball.landed { animation: bob 2.6s ease-in-out infinite; }
 
 .pwrow { display: flex; gap: 8px; align-items: stretch; } .pwrow input { flex: 1; min-width: 0; } .pwrow .btn { min-width: 84px; }
+
+.notifs { max-height: 230px; overflow: auto; display: grid; gap: 8px; }
+.notif { background: #03130e; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 2px; }
+.notif b { color: #fff; } .notif span { color: var(--muted); font-size: 13px; } .notif time { color: var(--ball); font-size: 12px; font-weight: 600; }

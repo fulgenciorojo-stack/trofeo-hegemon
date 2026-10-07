@@ -363,10 +363,20 @@
       <p class="muted small" style="margin:6px 0 0">Para que tu rival te escriba por WhatsApp. Solo lo ven el juez y quien tenga un reto contigo.</p>
       <div class="actions" style="margin-top:8px"><button class="btn go" data-act="savePhone">Guardar móvil</button></div>
       <h3>🔔 Avisos en este dispositivo</h3>${avisos}${instalar}
+      <h3>🕘 Historial de avisos</h3><div id="notifList" class="notifs small muted">Cargando…</div>
       <h3>🔑 Cambiar mi PIN</h3><div class="row"><div style="flex:1;min-width:120px"><label for="newPin">PIN nuevo (4 cifras)</label><input id="newPin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></div>
         <div style="flex:1;min-width:120px"><label for="newPin2">Repítelo</label><input id="newPin2" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></div></div>
       <div class="actions" style="margin-top:8px"><button class="btn" data-act="savePin">Cambiar PIN</button></div>
       <div class="actions" style="margin-top:18px;border-top:1px solid var(--line);padding-top:12px"><button class="btn danger" data-act="logout" style="margin-right:auto">Cerrar sesión</button>${cancel}</div>`);
+    loadNotifs();
+  }
+
+  async function loadNotifs() {
+    const box = document.getElementById('notifList'); if (!box) return;
+    const r = await rpc('tenis_my_notifications', creds()).catch(() => null), el = document.getElementById('notifList'); if (!el) return;
+    if (!r || r.error) { el.textContent = 'No se pudo cargar el historial.'; return; }
+    el.className = 'notifs';
+    el.innerHTML = r.items.length ? r.items.map((n) => `<div class="notif"><b>${esc(n.title)}</b><span>${esc(n.body)}</span><time>${ago(n.at)}</time></div>`).join('') : '<p class="small muted" style="margin:0">Todavía no has recibido avisos. Aquí aparecerán cuando te reten, te apunten un resultado o el juez publique algo.</p>';
   }
 
   // ---------- hojas ----------
