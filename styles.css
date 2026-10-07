@@ -385,3 +385,5 @@ nav button.locked .lk { position: absolute; top: 3px; right: calc(50% - 22px); c
 .ball{background:url(ball.png?v=27) center/cover no-repeat !important;box-shadow:0 3px 10px rgba(0,0,0,.45)}
 .ball::before,.ball::after{display:none !important}
 .intro-ball{box-shadow:none !important;filter:drop-shadow(0 0 26px rgba(212,245,60,.45)) drop-shadow(0 12px 18px rgba(0,0,0,.55))}
+
+.credit{margin:10px 0 0;font:500 12px Inter,sans-serif;letter-spacing:.04em;color:#7f9a8b;opacity:.75;text-align:center}.credit b{color:#a8c3b3;font-weight:600}
