@@ -64,6 +64,15 @@
   const isLive = () => !!(S && S.config && S.config.mode === 'vivo');
   const fmtTs = (iso) => new Date(iso).toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' });
   const future = (iso) => !!iso && new Date(iso).getTime() > now();
+  // Fases tras un reto (ranking vivo): esperando → protegido / retable → libre. Cambian cada día a la hora de actualización.
+  function stageOf(p) {
+    const ca = p.cantChallengeUntil || p.cant_challenge_until, cb = p.cantBeChallengedUntil || p.cant_be_challenged_until, a = future(ca), b = future(cb);
+    if (a && b) return { k: 'espera', icon: '⏳', label: 'Esperando', until: new Date(Math.min(+new Date(ca), +new Date(cb))).toISOString(), tip: 'No puede retar ni ser retado' };
+    if (!a && b) return { k: 'protegido', icon: '🛡️', label: 'Protegido', until: cb, tip: 'Puede retar, pero nadie puede retarle todavía' };
+    if (a && !b) return { k: 'retable', icon: '🎯', label: 'Retable', until: ca, tip: 'Puede ser retado, pero aún no puede retar' };
+    return { k: 'libre', icon: '🟢', label: 'Libre', until: null, tip: 'Puede retar y ser retado' };
+  }
+  const stageLine = (st) => (st.k === 'libre' ? '' : `${st.icon} ${st.label} · hasta ${fmtTs(st.until)}`);
   const myChal = () => (S && me ? S.challenges.find((c) => c.status !== 'anulado' && (c.a === me.id || c.b === me.id)) : null);
   const isMe = (id) => me && me.id === id;
   const waPhone = (p) => { if (!p) return null; let d = p.replace(/\D/g, ''); if (d.length === 9) d = '34' + d; return d; };
@@ -241,10 +250,10 @@
       const canTry = open && !mc && !mp.blocked && !mp.rp && !waitC;
       hero = `<section class="hero"><div class="kick">Hola, ${esc(firstName(mp.name))}</div>
         <div class="bigpos">#${mp.pos}<small>de ${S.players.length}</small></div>
-        <div class="row" style="margin:6px 0 10px">${status}${mp.blocked ? '<span class="pill">⛔ No retable</span>' : ''}${mp.rp ? '<span class="pill">🛡️ Ranking protegido</span>' : ''}${waitC ? `<span class="pill">⏸ Podrás retar el ${esc(fmtTs(mp.cantChallengeUntil))}</span>` : ''}${waitB ? `<span class="pill">🛡️ No te pueden retar hasta el ${esc(fmtTs(mp.cantBeChallengedUntil))}</span>` : ''}</div>
+        <div class="row" style="margin:6px 0 10px">${status}${mp.blocked ? '<span class="pill">⛔ No retable</span>' : ''}${mp.rp ? '<span class="pill">🛡️ Ranking protegido</span>' : ''}</div>${live && !mc ? (() => { const st = stageOf(mp); const txt = { espera: `No puedes retar ni te pueden retar hasta el ${fmtTs(st.until)}.`, protegido: `Puedes retar. Nadie puede retarte hasta el ${fmtTs(st.until)}.`, retable: `Te pueden retar. Tú podrás retar desde el ${fmtTs(st.until)}.`, libre: 'Puedes retar y te pueden retar.' }[st.k]; return `<div class="stage-box st-${st.k}"><b>${st.icon} ${st.label}</b><span>${esc(txt)}</span></div>`; })() : ''}
         ${canTry ? '<button class="btn go big" data-act="picker">⚔️ ¡Retar a alguien!</button>' : ''}
         ${!mc && !open ? '<p>Cuando el juez abra los retos podrás lanzar el tuyo desde aquí.</p>' : ''}
-        ${!mc && open && (mp.blocked || mp.rp) ? '<p>Ahora mismo no estás disponible para retar.</p>' : ''}${!mc && open && waitC ? '<p>Descansa un poco: cuando termine tu espera podrás lanzar otro reto.</p>' : ''}
+        ${!mc && open && (mp.blocked || mp.rp) ? '<p>Ahora mismo no estás disponible para retar.</p>' : ''}
         ${cd}</section>${S.me && !S.me.error && pushInfo && !pushInfo.on && (pushInfo.supported ? pushInfo.permission !== 'denied' : pushInfo.needsInstall) && !store.get('hegemon.pushHint') ? `<div class="card" style="border-color:var(--ball)"><h2>🔔 Activa los avisos</h2><p class="muted">Te avisamos en el móvil cuando te reten o te apunten un resultado, aunque la web esté cerrada.${pushInfo.needsInstall ? ' En iPhone, primero añade la web a la pantalla de inicio.' : ''}</p><div class="row"><button class="btn go" data-act="who">Configurar avisos</button><button class="btn" data-act="dismissPush">Ahora no</button></div></div>` : ''}${S.me && !S.me.error && !S.me.phone ? `<div class="card" style="border-color:var(--ball)"><h2>📱 Añade tu teléfono</h2><p class="muted">Así tu rival podrá escribirte por WhatsApp para quedar. Solo lo verán el juez y quien tenga un reto contigo.</p><button class="btn go" data-act="who">Añadir mi móvil</button></div>` : ''}${mc ? myDuel(mc) : ''}`;
     } else {
       hero = `<section class="hero"><div class="kick">Torneo social de tenis · ${esc(S.config.season)}</div>
@@ -299,9 +308,7 @@
     const inChal = {}; S.challenges.filter((c) => c.status !== 'anulado').forEach((c) => { inChal[c.a] = c.b; inChal[c.b] = c.a; });
     const pchd = new Set(S.prevChallenged);
     const badges = (p) => (S.config.challengeDay === 1 && pchd.has(p.id) ? '<span class="badge p" title="Retado el periodo anterior">P</span>' : '') + (p.down ? '<span class="badge">🔽</span>' : '') +
-      (p.blocked ? '<span class="badge">⛔ no retable</span>' : '') + (p.rp ? '<span class="badge">🛡️ RP</span>' : '') +
-      (isLive() && future(p.cantBeChallengedUntil) ? `<span class="badge" title="No se le puede retar hasta ${esc(fmtTs(p.cantBeChallengedUntil))}">🛡️ hasta ${esc(new Date(p.cantBeChallengedUntil).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' }))}</span>` : '') +
-      (isLive() && future(p.cantChallengeUntil) ? `<span class="badge" title="No puede retar hasta ${esc(fmtTs(p.cantChallengeUntil))}">⏸ sin retar hasta ${esc(new Date(p.cantChallengeUntil).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' }))}</span>` : '');
+      (p.blocked ? '<span class="badge">⛔ no retable</span>' : '') + (p.rp ? '<span class="badge">🛡️ RP</span>' : '');
     const top = S.players.slice(0, 3);
     const podium = !q && top.length === 3 ? `<div class="podium">${[1, 0, 2].map((i) => { const p = top[i]; return `<div class="pod g${i + 1} ${isMe(p.id) ? 'me' : ''}" data-flip="${p.id}"><div class="medal">${['🥇', '🥈', '🥉'][i]}</div><div class="num">${p.pos}</div><div class="n">${esc(p.name)}</div>${inChal[p.id] ? '<div class="small" style="color:var(--clay)">⚔️ en reto</div>' : ''}</div>`; }).join('')}</div>` : '';
     let rows = '', lastZone = -1;
@@ -310,10 +317,15 @@
       if (q && !p.name.toLowerCase().includes(q)) return;
       const zone = Math.floor((p.pos - 1) / 16);
       if (!q && zone !== lastZone) { lastZone = zone; rows += `<div class="zone">${zone === 0 ? 'Zona Trofeo Hegemón · 1–16' : `${zone + 1}.ª división · ${zone * 16 + 1}–${zone * 16 + 16}`}</div>`; }
+      const st = isLive() ? (inChal[p.id] ? { k: 'reto', icon: '⚔️', label: 'En reto', tip: 'Tiene un reto en juego' } : stageOf(p)) : null;
       rows += `<div class="rrow ${isMe(p.id) ? 'me' : ''} ${inChal[p.id] ? 'inchal' : ''}" data-flip="${p.id}"><div class="num">${p.pos}</div>
-        <div class="nm">${esc(p.name)}${badges(p)}${inChal[p.id] ? `<small>⚔️ vs ${esc(nm(inChal[p.id]))}</small>` : ''}</div></div>`;
+        <div class="nm">${esc(p.name)}${badges(p)}${inChal[p.id] ? `<small>⚔️ vs ${esc(nm(inChal[p.id]))}</small>` : st && st.k !== 'libre' ? `<small class="stg st-${st.k}">${esc(stageLine(st))}</small>` : ''}</div>${st ? `<div class="rst" title="${esc(st.label + ' · ' + st.tip)}">${st.icon}</div>` : ''}</div>`;
     });
-    return `<div class="card" style="padding:12px"><input type="search" id="filter" placeholder="🔎 Buscar jugador…" value="${esc(ui.filter)}" data-input="filter"></div>${podium}${rows || '<div class="empty">Sin resultados</div>'}`;
+    const c0 = S.config, hr = String(c0.refreshHour == null ? 7 : c0.refreshHour).padStart(2, '0') + ':00';
+    const legend = isLive() ? `<details class="legend card"><summary>ℹ️ Qué significan los símbolos</summary>
+      <p class="small muted" style="margin:8px 0">Al apuntarse un resultado el ranking se mueve al instante y cada jugador pasa por estas fases. Se renuevan cada día a las ${hr}.</p>
+      <ul class="legend-list"><li><b>⏳ Esperando</b> · ${c0.waitBoth} días: no puede retar ni ser retado.</li><li><b>🛡️ Protegido</b> · el ganador, ${c0.winnerDays} días más: puede retar, pero nadie puede retarle.</li><li><b>🎯 Retable</b> · el perdedor, ${c0.loserDays} días más: pueden retarle, pero aún no puede retar.</li><li><b>🟢 Libre</b> · puede retar y ser retado.</li><li><b>⚔️ En reto</b> · tiene un reto en juego.</li></ul></details>` : '';
+    return legend + `<div class="card" style="padding:12px"><input type="search" id="filter" placeholder="🔎 Buscar jugador…" value="${esc(ui.filter)}" data-input="filter"></div>${podium}${rows || '<div class="empty">Sin resultados</div>'}`;
   }
 
   // --- Retos
@@ -566,7 +578,7 @@
   function admPlayers() {
     const n = A.players.length;
     const rows = A.players.map((p, i) => `<tr class="arow"><td class="apos">${p.pos}</td>
-      <td><b>${esc(p.name)}</b>${p.blocked ? ' <span class="badge">⛔ no retable</span>' : ''}${p.rp ? ' <span class="badge">🛡️ RP</span>' : ''}${p.down ? ' <span class="badge">🔽</span>' : ''}${p.sin_pref ? ' <span class="badge">sin pref.</span>' : ''}<div class="small muted">${esc(p.phone || 'sin teléfono')}</div></td>
+      <td><b>${esc(p.name)}</b>${A.config.mode === 'vivo' ? (() => { const st = stageOf(p); return st.k === 'libre' ? '' : ` <span class="badge" title="${esc(st.tip)}">${st.icon} ${st.label} · ${esc(new Date(st.until).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' }))}</span>`; })() : ''}${p.blocked ? ' <span class="badge">⛔ no retable</span>' : ''}${p.rp ? ' <span class="badge">🛡️ RP</span>' : ''}${p.down ? ' <span class="badge">🔽</span>' : ''}${p.sin_pref ? ' <span class="badge">sin pref.</span>' : ''}<div class="small muted">${esc(p.phone || 'sin teléfono')}</div></td>
       <td class="pin">${esc(p.pin)}</td>
       <td class="aacts"><button class="btn sm" data-act="mvPlayer" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir">▲</button><button class="btn sm" data-act="mvPlayer" data-i="${i}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="Bajar">▼</button>
         <button class="btn sm go" data-act="editPlayer" data-id="${p.id}">Editar</button><button class="btn sm" data-act="copyAccess" data-id="${p.id}">📲 Acceso</button></td></tr>`).join('');
@@ -600,14 +612,15 @@
       <label>Juez árbitro</label><input id="cRef" value="${esc(c.referee)}"><label>Días por periodo</label><input id="cDays" type="number" min="7" max="30" value="${c.periodDays}">
       <div class="actions"><button class="btn go" data-act="saveCfg">Guardar</button></div></div>
       <div class="card"><h2>Modo del torneo</h2>
-        <div class="seg"><button class="btn" data-act="setMode" data-v="periodos" aria-pressed="${c.mode !== 'vivo'}">Periodos (como las bases)</button><button class="btn" data-act="setMode" data-v="vivo" aria-pressed="${c.mode === 'vivo'}">Ranking vivo</button></div>
+        <div class="seg"><button class="btn" data-act="setMode" data-v="periodos" aria-pressed="${c.mode !== 'vivo'}">Periodos (modo antiguo)</button><button class="btn" data-act="setMode" data-v="vivo" aria-pressed="${c.mode === 'vivo'}">Ranking vivo (recomendado)</button></div>
         <p class="small muted" style="margin-top:8px">En <b>ranking vivo</b> los puestos se mueven al apuntar cada resultado y los retos se suceden poco a poco, con esperas entre uno y otro. Para activarlo, primero cierra el periodo en curso.</p>
         <h3>Esperas y plazos (días)</h3>
         <div class="row"><div style="flex:1;min-width:130px"><label for="wBoth">Espera de ambos tras el reto</label><input id="wBoth" type="number" min="0" max="30" value="${c.waitBoth}"></div>
           <div style="flex:1;min-width:130px"><label for="wWin">Ganador sin ser retado (después)</label><input id="wWin" type="number" min="0" max="60" value="${c.winnerDays}"></div></div>
         <div class="row"><div style="flex:1;min-width:130px"><label for="wLose">Perdedor sin retar (después)</label><input id="wLose" type="number" min="0" max="60" value="${c.loserDays}"></div>
           <div style="flex:1;min-width:130px"><label for="wDays">Plazo para jugar un reto</label><input id="wDays" type="number" min="3" max="60" value="${c.challengeDays}"></div></div>
-        <p class="small muted">Ejemplo con 2 / 5 / 5: tras el reto, ambos 2 días sin retar ni ser retados; después, el ganador 5 días sin ser retado (puede retar) y el perdedor 5 días sin retar (puede ser retado).</p>
+        <div class="row"><div style="flex:1;min-width:130px"><label for="wHour">Hora de actualización diaria (0-23)</label><input id="wHour" type="number" min="0" max="23" value="${c.refreshHour == null ? 7 : c.refreshHour}"></div></div>
+        <p class="small muted">Las esperas terminan siempre a la hora de actualización diaria (por defecto las 07:00) y ese día se avisa a quien cambia de fase. Ejemplo con 2 / 5 / 5: tras el reto, ambos 2 días sin retar ni ser retados; después, el ganador 5 días sin ser retado (puede retar) y el perdedor 5 días sin retar (puede ser retado).</p>
         <div class="actions"><button class="btn go" data-act="saveLive">Guardar esperas y plazos</button></div></div>
       <div class="card"><h2>Cuadros finales</h2><p class="muted small">Fija la clasificación al terminar la fase de retos. Después marca los ganadores en la pestaña Cuadros.</p>
         <div class="row"><button class="btn go" data-act="freeze" data-on="1">Fijar clasificación final</button><button class="btn danger" data-act="freeze" data-on="0">Liberar</button></div></div>
@@ -814,7 +827,7 @@
       adm('config', { mode }, mode === 'vivo' ? '⚡ Ranking vivo activado' : 'Modo por periodos activado');
     },
     saveLive() {
-      adm('config', { waitBoth: Number($('#wBoth').value), winnerDays: Number($('#wWin').value), loserDays: Number($('#wLose').value), challengeDays: Number($('#wDays').value) }, 'Esperas y plazos guardados');
+      adm('config', { waitBoth: Number($('#wBoth').value), winnerDays: Number($('#wWin').value), loserDays: Number($('#wLose').value), challengeDays: Number($('#wDays').value), refreshHour: Number($('#wHour').value) }, 'Esperas y plazos guardados');
     },
     aEdit(el) {
       const c = curPeriod().challenges.find((x) => x.id === el.dataset.id);
