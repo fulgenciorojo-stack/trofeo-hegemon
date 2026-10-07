@@ -1073,17 +1073,17 @@
     const ball = document.createElement('div'); ball.className = 'ball intro-ball';
     ball.style.cssText = `left:${tx - size / 2}px;top:${ty - size / 2}px;width:${size}px;height:${size}px`;
     document.body.appendChild(ball);
-    const D = 2900;
+    const D = 3400;
     const kf = [
       { offset: 0, transform: `translate(${dx}px,${dy}px) scale(0) rotate(0deg)`, easing: 'cubic-bezier(.2,1.6,.4,1)' },
-      { offset: 0.2, transform: `translate(${dx}px,${dy}px) scale(${S * 1.12}) rotate(260deg)`, easing: 'ease-out' },
-      { offset: 0.34, transform: `translate(${dx}px,${dy - 14}px) scale(${S}) rotate(520deg)`, easing: 'ease-in-out' },
-      { offset: 0.5, transform: `translate(${dx}px,${dy + 6}px) scale(${S * 1.02}) rotate(900deg)`, easing: 'cubic-bezier(.5,0,.9,.4)' },
-      { offset: 0.74, transform: `translate(${dx * 0.42}px,${Math.max(dy * 0.42 - Math.min(190, innerHeight * 0.25), -(ty - size * 1.4))}px) scale(${S * 0.5}) rotate(1500deg)`, easing: 'cubic-bezier(.3,.7,.6,1)' },
-      { offset: 0.88, transform: `translate(0px,0px) scale(1.04) rotate(2100deg)`, easing: 'ease-in' },
-      { offset: 0.925, transform: `translate(0px,${size * 0.2}px) scale(1.55,0.5) rotate(2100deg)`, easing: 'ease-out' },
-      { offset: 0.965, transform: `translate(0px,-${size * 0.12}px) scale(0.92,1.1) rotate(2100deg)`, easing: 'ease-in-out' },
-      { offset: 1, transform: `translate(0px,0px) scale(1) rotate(2100deg)` },
+      { offset: 0.2, transform: `translate(${dx}px,${dy}px) scale(${S * 1.12}) rotate(-6deg)`, easing: 'ease-out' },
+      { offset: 0.34, transform: `translate(${dx}px,${dy - 14}px) scale(${S}) rotate(4deg)`, easing: 'ease-in-out' },
+      { offset: 0.5, transform: `translate(${dx}px,${dy + 6}px) scale(${S * 1.02}) rotate(0deg)`, easing: 'cubic-bezier(.5,0,.9,.4)' },
+      { offset: 0.74, transform: `translate(${dx * 0.42}px,${Math.max(dy * 0.42 - Math.min(190, innerHeight * 0.25), -(ty - size * 1.4))}px) scale(${S * 0.5}) rotate(1080deg)`, easing: 'cubic-bezier(.3,.7,.6,1)' },
+      { offset: 0.88, transform: `translate(0px,0px) scale(1.04) rotate(1800deg)`, easing: 'ease-in' },
+      { offset: 0.925, transform: `translate(0px,${size * 0.2}px) scale(1.55,0.5) rotate(1800deg)`, easing: 'ease-out' },
+      { offset: 0.965, transform: `translate(0px,-${size * 0.12}px) scale(0.92,1.1) rotate(1800deg)`, easing: 'ease-in-out' },
+      { offset: 1, transform: `translate(0px,0px) scale(1) rotate(1800deg)` },
     ];
     veil.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1, offset: 0.62 }, { opacity: 0 }], { duration: D * 0.82, fill: 'forwards' }).onfinish = () => veil.remove();
     shadow.style.cssText = `left:${cx - 60}px;top:${cy + S * size * 0.62}px`;
