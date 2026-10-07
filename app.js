@@ -221,7 +221,7 @@
         ${canTry ? '<button class="btn go big" data-act="picker">⚔️ ¡Retar a alguien!</button>' : ''}
         ${!mc && !open ? '<p>Cuando el juez abra los retos podrás lanzar el tuyo desde aquí.</p>' : ''}
         ${!mc && open && (mp.blocked || mp.rp) ? '<p>Ahora mismo no estás disponible para retar.</p>' : ''}
-        ${cd}</section>${S.me && !S.me.error && !S.me.phone ? `<div class="card" style="border-color:var(--ball)"><h2>📱 Añade tu teléfono</h2><p class="muted">Así tu rival podrá escribirte por WhatsApp para quedar. Solo lo verán el juez y quien tenga un reto contigo.</p><button class="btn go" data-act="who">Añadir mi móvil</button></div>` : ''}${mc ? myDuel(mc) : ''}`;
+        ${cd}</section>${S.me && !S.me.error && pushInfo && !pushInfo.on && (pushInfo.supported ? pushInfo.permission !== 'denied' : pushInfo.needsInstall) && !store.get('hegemon.pushHint') ? `<div class="card" style="border-color:var(--ball)"><h2>🔔 Activa los avisos</h2><p class="muted">Te avisamos en el móvil cuando te reten o te apunten un resultado, aunque la web esté cerrada.${pushInfo.needsInstall ? ' En iPhone, primero añade la web a la pantalla de inicio.' : ''}</p><div class="row"><button class="btn go" data-act="who">Configurar avisos</button><button class="btn" data-act="dismissPush">Ahora no</button></div></div>` : ''}${S.me && !S.me.error && !S.me.phone ? `<div class="card" style="border-color:var(--ball)"><h2>📱 Añade tu teléfono</h2><p class="muted">Así tu rival podrá escribirte por WhatsApp para quedar. Solo lo verán el juez y quien tenga un reto contigo.</p><button class="btn go" data-act="who">Añadir mi móvil</button></div>` : ''}${mc ? myDuel(mc) : ''}`;
     } else {
       hero = `<section class="hero"><div class="kick">Torneo social de tenis · ${esc(S.config.season)}</div>
         <h1>${esc(S.config.title)}</h1><p>Escala el ranking retando a quien tienes por encima. Entra con tu PIN para lanzar retos y apuntar resultados.</p>
@@ -325,6 +325,48 @@
     if (!S.history.length) return '<div class="card empty"><h2>Historial</h2><p>Aquí aparecerán los periodos cerrados con todos los movimientos del ranking.</p></div>';
     return S.history.map((h) => `<div class="card"><h2>Periodo ${h.n} <span class="muted small">${fmtDate(h.start)} – ${fmtDate(h.end)}</span></h2>
       <ul class="log">${h.log.map((l) => `<li>${esc(l)}</li>`).join('') || '<li class="muted">Sin movimientos</li>'}</ul></div>`).join('');
+  }
+
+
+  // ---------- avisos push, instalación y PIN ----------
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  const pushCapable = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  let deferredInstall = null, pushInfo = null;
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; });
+  const b64ToU8 = (b) => { const p = '='.repeat((4 - (b.length % 4)) % 4), r = atob((b + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map((c) => c.charCodeAt(0))); };
+
+  async function pushStatus() {
+    if (!pushCapable) return { supported: false, needsInstall: isIOS && !standalone, on: false };
+    let on = false;
+    try { const reg = await navigator.serviceWorker.getRegistration(); const sub = reg ? await reg.pushManager.getSubscription() : null; on = !!sub && Notification.permission === 'granted'; } catch (e) { /* */ }
+    return { supported: true, permission: Notification.permission, on, needsInstall: false };
+  }
+  async function refreshPush() { const s = await pushStatus(); const ch = JSON.stringify(s) !== JSON.stringify(pushInfo); pushInfo = s; if (ch && S) render(); return s; }
+  // mantiene el dispositivo asociado al jugador que ha entrado (si ya dio permiso)
+  async function syncPush() {
+    if (!me || !pushCapable || Notification.permission !== 'granted' || window.TENIS_DEMO) return;
+    try { const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); if (sub) await rpc('tenis_push_subscribe', { ...creds(), p_sub: sub.toJSON() }); } catch (e) { /* */ }
+  }
+
+  function profileSheet() {
+    const ph = (S.me && S.me.phone) || '', ps = pushInfo || { supported: false }, canInstall = !!deferredInstall;
+    let avisos;
+    if (ps.supported && ps.on) avisos = `<p class="small">✅ Activados en este dispositivo. Te avisaremos cuando te reten, te apunten un resultado o el juez abra los retos.</p><button class="btn" data-act="disablePush">Desactivar avisos</button>`;
+    else if (ps.supported && ps.permission === 'denied') avisos = `<div class="note small">Has bloqueado las notificaciones de esta web. Actívalas en los ajustes del navegador (candado junto a la dirección → Notificaciones) y vuelve aquí.</div>`;
+    else if (ps.supported) avisos = `<p class="small muted">Recibe un aviso en el móvil aunque la web esté cerrada.</p><button class="btn go" data-act="enablePush">🔔 Activar avisos</button>`;
+    else if (ps.needsInstall) avisos = `<div class="note small">En iPhone los avisos solo funcionan con la web instalada. Pulsa <b>Compartir</b> (el cuadrado con la flecha) → <b>Añadir a pantalla de inicio</b>, abre la web desde ese icono y vuelve aquí.</div>`;
+    else avisos = `<p class="small muted">Este navegador no permite avisos. Prueba con Chrome o Safari actualizados.</p>`;
+    const instalar = canInstall ? `<h3>📲 Instalar como app</h3><button class="btn" data-act="installApp">Añadir a la pantalla de inicio</button>` : (isIOS && !standalone ? `<h3>📲 Instalar como app</h3><p class="small muted">Compartir → Añadir a pantalla de inicio.</p>` : '');
+    sheet(`<h2>${esc(nm(me.id))}</h2>
+      <label for="myPhone">Tu móvil</label><input id="myPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="612345678" value="${esc(ph)}">
+      <p class="muted small" style="margin:6px 0 0">Para que tu rival te escriba por WhatsApp. Solo lo ven el juez y quien tenga un reto contigo.</p>
+      <div class="actions" style="margin-top:8px"><button class="btn go" data-act="savePhone">Guardar móvil</button></div>
+      <h3>🔔 Avisos en este dispositivo</h3>${avisos}${instalar}
+      <h3>🔑 Cambiar mi PIN</h3><div class="row"><div style="flex:1;min-width:120px"><label for="newPin">PIN nuevo (4 cifras)</label><input id="newPin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></div>
+        <div style="flex:1;min-width:120px"><label for="newPin2">Repítelo</label><input id="newPin2" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></div></div>
+      <div class="actions" style="margin-top:8px"><button class="btn" data-act="savePin">Cambiar PIN</button></div>
+      <div class="actions" style="margin-top:18px;border-top:1px solid var(--line);padding-top:12px"><button class="btn danger" data-act="logout" style="margin-right:auto">Cerrar sesión</button>${cancel}</div>`);
   }
 
   // ---------- hojas ----------
@@ -536,19 +578,46 @@
     admTab(el) { ui.admTab = el.dataset.v; render(); },
     closeSheet, closeOv: closeOverlay,
     retry() { refresh(true); },
-    who() {
+    async who() {
+      if (window.TENIS_DEMO) return toast('Vista previa de solo lectura: la entrada con PIN está desactivada.');
       if (!me) return loginSheet();
-      const ph = (S.me && S.me.phone) || '';
-      sheet(`<h2>${esc(nm(me.id))}</h2><p class="muted small">Tu teléfono sirve para que tu rival te escriba por WhatsApp cuando te rete (o tú a él). Solo lo ven el juez y los jugadores con los que tengas un reto.</p>
-        <label for="myPhone">Tu móvil</label><input id="myPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="612345678" value="${esc(ph)}">
-        <div class="actions"><button class="btn danger" data-act="logout" style="margin-right:auto">Cerrar sesión</button>${cancel}<button class="btn go" data-act="savePhone">Guardar</button></div>`);
+      await refreshPush(); profileSheet();
     },
+    async enablePush() {
+      if (!pushCapable) return toast('Este dispositivo no admite avisos', 'err');
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { await refreshPush(); return toast('No has dado permiso para avisar. Puedes activarlo en los ajustes del navegador.', 'err'); }
+      try {
+        const reg = await navigator.serviceWorker.ready; let sub = await reg.pushManager.getSubscription();
+        if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(CFG.vapidPublic) });
+        const r = await rpc('tenis_push_subscribe', { ...creds(), p_sub: sub.toJSON() });
+        if (r.error) return toast(esc(r.error), 'err');
+      } catch (e) { return toast('No se pudieron activar los avisos en este dispositivo', 'err'); }
+      await refreshPush(); profileSheet(); toast('🔔 Avisos activados'); burst({ n: 50 });
+    },
+    async disablePush() {
+      try { const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); if (sub) { await rpc('tenis_push_unsubscribe', { ...creds(), p_endpoint: sub.endpoint }); await sub.unsubscribe(); } } catch (e) { /* */ }
+      await refreshPush(); profileSheet(); toast('Avisos desactivados');
+    },
+    async installApp() { if (!deferredInstall) return; deferredInstall.prompt(); try { await deferredInstall.userChoice; } catch (e) { /* */ } deferredInstall = null; profileSheet(); },
+    async savePin() {
+      const a = $('#newPin').value.trim(), b = $('#newPin2').value.trim();
+      if (!/^\d{4}$/.test(a)) return toast('El PIN nuevo debe tener 4 cifras', 'err');
+      if (a !== b) return toast('Los dos PIN no coinciden', 'err');
+      const r = await rpc('tenis_set_pin', { ...creds(), p_new: a }).catch(() => ({ error: 'Sin conexión' }));
+      if (r.error) return toast(esc(r.error), 'err');
+      me = { id: me.id, pin: a }; store.set('hegemon.me', me); closeSheet(); toast('✅ PIN cambiado. Úsalo la próxima vez que entres.');
+    },
+    dismissPush() { store.set('hegemon.pushHint', 1); render(); },
     async savePhone() {
       const v = $('#myPhone').value, r = await rpc('tenis_set_phone', { ...creds(), p_phone: v }).catch(() => ({ error: 'Sin conexión' }));
       if (r.error) return toast(esc(r.error), 'err');
       closeSheet(); await refresh(true); toast(r.phone ? 'Teléfono guardado' : 'Teléfono borrado'); if (r.phone) burst({ n: 40 });
     },
-    logout() { me = null; store.del('hegemon.me'); closeSheet(); refresh(true); },
+    async logout() {
+      try { if (pushCapable) { const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); if (sub) await rpc('tenis_push_unsubscribe', { ...creds(), p_endpoint: sub.endpoint }); } } catch (e) { /* */ }
+      me = null; store.del('hegemon.me'); closeSheet(); refresh(true);
+    },
     async login() {
       const id = $('#lgName').value, pin = $('#lgPin').value.trim();
       if (!id || pin.length !== 4) return toast('Elige tu nombre y escribe tu PIN de 4 cifras', 'err');
@@ -735,10 +804,11 @@
 
   // ---------- arranque ----------
   const hash = location.hash.match(/j=([0-9a-f-]{36})/);
+  if ('serviceWorker' in navigator && !window.TENIS_DEMO && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js?v=4').catch(() => {});
   window.hegemonIntro = introBall;
   introBall();
   render();
-  refresh(true).then(() => { if (hash && !me && S) { loginSheet(hash[1]); } if (location.hash === '#admin') actions.adminEntry(); });
+  refresh(true).then(() => { refreshPush().then(syncPush); if (hash && !me && S) { loginSheet(hash[1]); } if (location.hash === '#admin') actions.adminEntry(); });
   setInterval(() => { if (!document.hidden) refresh(); }, CFG.pollMs);
   setInterval(tickCountdowns, 30000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
