@@ -238,7 +238,8 @@
     $('#who').textContent = mp ? mp.name : 'Entrar';
     $('#who').classList.toggle('on', !!mp);
     const tabs = TABS.concat(adminPwd ? [['adm', 'adm', 'Juez']] : []);
-    $('#tabs').innerHTML = tabs.map(([k, i, l]) => `<button data-act="tab" data-v="${k}" ${ui.tab === k ? 'aria-current="true"' : ''}>${icon(i)}<em>${l}</em></button>`).join('');
+    const lockedBr = bracketLocked();
+    $('#tabs').innerHTML = tabs.map(([k, i, l]) => { const lk = k === 'bracket' && lockedBr; return `<button data-act="tab" data-v="${k}" class="${lk ? 'locked' : ''}" ${ui.tab === k ? 'aria-current="true"' : ''} ${lk ? 'aria-label="Cuadros (aún no disponibles)"' : ''}>${icon(i)}${lk ? '<svg class="lk" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h1Zm2 0h6V8a3 3 0 0 0-6 0v2Z"/></svg>' : ''}<em>${l}</em></button>`; }).join('');
     const rects = {};
     if (old) document.querySelectorAll('[data-flip]').forEach((el) => { rects[el.dataset.flip] = el.getBoundingClientRect(); });
     const views = { home: vHome, rank: vRank, duels: vDuels, bracket: vBracket, hist: vHist, adm: vAdmin };
@@ -399,7 +400,15 @@
   }
 
   // --- Cuadros
+  // Los cuadros se abren al final de la temporada, cuando el juez fija la clasificación final (el juez los ve siempre)
+  const bracketLocked = () => !S || (!S.finalRanking && !adminPwd);
   function vBracket() {
+    if (bracketLocked()) {
+      return `<div class="card empty lockcard"><svg viewBox="0 0 64 64" width="84" height="84" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:var(--muted);opacity:.8"><path d="M20 8h24v17a12 12 0 0 1-24 0V8Z"/><path d="M20 14h-9v4a10 10 0 0 0 9 10M44 14h9v4a10 10 0 0 1-9 10"/><path d="M32 37v10M22 56h20M25 47h14"/></svg>
+        <h2 style="margin-top:10px">Cuadros finales</h2><p><b>Retos jugándose.</b></p>
+        <p class="muted" style="max-width:46ch;margin:6px auto 14px">Los cuadros del Trofeo Hegemón se abrirán al terminar la fase de retos, cuando el juez fije la clasificación final. Mientras tanto, a escalar posiciones.</p>
+        <div class="row" style="justify-content:center"><button class="btn go" data-act="tab" data-v="rank">Ver el ranking</button><button class="btn" data-act="tab" data-v="duels">Ver los retos</button></div></div>`;
+    }
     const source = S.finalRanking || S.players.map((p) => p.id);
     const groups = L.buildGroups(source), isAdm = !!adminPwd;
     const head = `<div class="card"><h2>Cuadros finales · Trofeo Hegemón</h2><p class="muted small">${S.finalRanking ? 'Clasificación final fijada.' : 'Vista previa con el ranking actual. Se fijará al terminar la fase de retos (mayo-junio).'}</p>

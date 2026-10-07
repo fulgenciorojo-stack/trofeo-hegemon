@@ -373,3 +373,9 @@ textarea.cmt { min-height: 110px; resize: vertical; }
 .pod .medal { line-height: 0; margin-bottom: 4px; display: block !important; }
 .pod.g1 .ptro { animation: floaty 3.2s ease-in-out infinite; } .pod.g2 .ptro, .pod.g3 .ptro { animation: floaty 3.8s ease-in-out infinite; }
 @keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
+/* cuadros bloqueados hasta final de temporada */
+nav button { position: relative; }
+nav button.locked { opacity: .55; } nav button.locked .ico { filter: grayscale(.9); }
+nav button.locked .lk { position: absolute; top: 3px; right: calc(50% - 22px); color: #fff; background: #1b2e25; border-radius: 50%; padding: 2px; width: 17px; height: 17px; }
+.lockcard { padding: 34px 16px; }
