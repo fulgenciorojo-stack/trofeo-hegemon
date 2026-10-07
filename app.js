@@ -14,7 +14,18 @@
   // ---------- estado ----------
   let S = null;                     // estado público
   let A = null;                     // estado admin (si hay sesión de juez)
+  // La sesión (jugador + PIN) se guarda en localStorage y se replica en IndexedDB; si un almacén se pierde, se recupera del otro.
+  const idb = {
+    open() { return new Promise((res, rej) => { const r = indexedDB.open('hegemon', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+    async get(k) { try { const db = await this.open(); return await new Promise((res) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); }); } catch (e) { return null; } },
+    async set(k, v) { try { const db = await this.open(); await new Promise((res) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = res; }); } catch (e) { /* */ } },
+    async del(k) { try { const db = await this.open(); await new Promise((res) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').delete(k); t.oncomplete = res; t.onerror = res; }); } catch (e) { /* */ } },
+  };
+  const askPersist = () => { try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* */ } };
+  const saveSession = (v) => { store.set('hegemon.me', v); idb.set('me', v); askPersist(); };
+  const clearSession = () => { store.del('hegemon.me'); idb.del('me'); };
   let me = store.get('hegemon.me'); // {id, pin}
+  if (me && me.id) idb.set('me', me); else me = null;
   let adminPwd = null; try { adminPwd = sessionStorage.getItem('hegemon.admin'); } catch (e) { /* */ }
   const ui = { tab: 'home', admTab: 'control', filter: '' };
   let clockOffset = 0, lastSig = '', lastEventId = store.get('hegemon.lastEv');
@@ -146,9 +157,15 @@
       const data = await rpc('tenis_state', creds());
       clockOffset = new Date(data.now).getTime() - Date.now();
       if (me && data.me && data.me.error) {
-        toast('Tu sesión ha caducado: ' + esc(data.me.error), 'err'); me = null; store.del('hegemon.me');
+        // Solo se cierra la sesión si el PIN ya no es válido (cambiado por el juez o desde otro dispositivo), confirmado dos veces seguidas.
+        // Cualquier otro error (bloqueo temporal, fallo del servidor…) mantiene la sesión.
+        if (/PIN incorrecto|no encontrado/i.test(data.me.error)) {
+          ui.badPin = (ui.badPin || 0) + 1;
+          if (ui.badPin >= 2) { toast('Tu PIN ya no es válido (¿lo han cambiado?). Entra de nuevo con el PIN nuevo.', 'err'); me = null; clearSession(); ui.badPin = 0; }
+        }
       }
       if (adminPwd) { const a = await admin('state'); if (a.error) { adminPwd = null; try { sessionStorage.removeItem('hegemon.admin'); } catch (e) { /* */ } } else A = a; }
+      if (data.me && !data.me.error) ui.badPin = 0;
       const sig = JSON.stringify([data.players, data.challenges, data.config, data.period, data.events.length && data.events[0].id, data.bracket, data.finalRanking, data.me, A && [A.players.length, A.snapshots, A.periods.length]]);
       const changed = sig !== lastSig; lastSig = sig;
       const old = S; S = data;
@@ -663,7 +680,7 @@
       if (a !== b) return toast('Los dos PIN no coinciden', 'err');
       const r = await rpc('tenis_set_pin', { ...creds(), p_new: a }).catch(() => ({ error: 'Sin conexión' }));
       if (r.error) return toast(esc(r.error), 'err');
-      me = { id: me.id, pin: a }; store.set('hegemon.me', me); closeSheet(); toast('✅ PIN cambiado. Úsalo la próxima vez que entres.');
+      me = { id: me.id, pin: a }; saveSession(me); closeSheet(); toast('✅ PIN cambiado. Úsalo la próxima vez que entres.');
     },
     dismissPush() { store.set('hegemon.pushHint', 1); render(); },
     async savePhone() {
@@ -673,14 +690,14 @@
     },
     async logout() {
       try { if (pushCapable) { const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); if (sub) await rpc('tenis_push_unsubscribe', { ...creds(), p_endpoint: sub.endpoint }); } } catch (e) { /* */ }
-      me = null; store.del('hegemon.me'); closeSheet(); refresh(true);
+      me = null; clearSession(); closeSheet(); refresh(true);
     },
     async login() {
       const id = $('#lgName').value, pin = $('#lgPin').value.trim();
       if (!id || pin.length !== 4) return toast('Elige tu nombre y escribe tu PIN de 4 cifras', 'err');
       const r = await rpc('tenis_login', { p_id: id, p_pin: pin }).catch(() => ({ error: 'Sin conexión' }));
       if (r.error) return toast(esc(r.error), 'err');
-      me = { id, pin }; store.set('hegemon.me', me); closeSheet(); await refresh(true); ui.tab = 'home'; render();
+      me = { id, pin }; saveSession(me); closeSheet(); await refresh(true); ui.tab = 'home'; render();
       toast(`¡Bienvenido, ${esc(firstName(nm(id)))}!`); burst({ n: 70 });
     },
     picker: openPicker, confirmChallenge, doChallenge, resultSheet(el) { resultSheet(el.dataset.id); }, report,
@@ -862,6 +879,8 @@
   // ---------- arranque ----------
   const hash = location.hash.match(/j=([0-9a-f-]{36})/);
   if ('serviceWorker' in navigator && !window.TENIS_DEMO && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js?v=4').catch(() => {});
+  if (!me) idb.get('me').then((v) => { if (v && v.id && v.pin && !me) { me = v; store.set('hegemon.me', v); refresh(true); } });
+  if (me) askPersist();
   window.hegemonIntro = introBall;
   introBall();
   render();
