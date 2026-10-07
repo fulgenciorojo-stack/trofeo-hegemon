@@ -444,9 +444,9 @@
     if (!ui.news) feed = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
     else {
       const week = now() - 7 * 864e5, pinnedNotes = ui.news.notes.filter((x) => x.kind === 'notice' && new Date(x.at).getTime() > week);
-      const items = ui.news.stories.map((x) => ({ t: new Date(x.newsAt).getTime(), h: newsCard(x) })).concat(ui.news.notes.filter((x) => !pinnedNotes.includes(x)).map((x) => ({ t: new Date(x.at).getTime(), h: noteCard(x) }))).sort((p, q) => q.t - p.t);
+      const items = ui.news.stories.filter((x) => x.status === 'jugado').map((x) => ({ t: new Date(x.newsAt).getTime(), h: newsCard(x) })).concat(ui.news.notes.filter((x) => x.kind === 'notice' && !pinnedNotes.includes(x)).map((x) => ({ t: new Date(x.at).getTime(), h: noteCard(x) }))).sort((p, q) => q.t - p.t);
       const top = pinnedNotes.sort((p, q) => new Date(q.at) - new Date(p.at)).map((x) => noteCard(x, true));
-      feed = items.length || top.length ? top.join('') + items.map((x) => x.h).join('') + (ui.newsMore ? '<div style="text-align:center"><button class="btn" data-act="moreNews">Ver noticias anteriores</button></div>' : '') : '<div class="card empty"><h2>Todavía no hay noticias</h2><p>Cada reto se contará aquí: quién reta, quién juega y cómo acaba.</p></div>';
+      feed = items.length || top.length ? top.join('') + items.map((x) => x.h).join('') + (ui.newsMore ? '<div style="text-align:center"><button class="btn" data-act="moreNews">Ver noticias anteriores</button></div>' : '') : '<div class="card empty"><h2>Todavía no hay noticias</h2><p>Aquí saldrán los resultados de los partidos con los comentarios de los jugadores, y los avisos del juez.</p></div>';
     }
     return head + feed + `<details class="legend card" style="margin-top:14px"><summary>Archivo de movimientos del ranking</summary>${vArchive()}</details>`;
   }
