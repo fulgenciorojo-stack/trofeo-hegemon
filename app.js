@@ -323,7 +323,7 @@
     return `<h3 style="padding:0 4px">Tu reto</h3>${duelCard(c, true)}`;
   }
 
-  function duelCard(c, mine) {
+  function duelCard(c, mine, idx) {
     const label = { pendiente: 'Por jugar', jugado: 'Jugado', sinResultado: 'Sin resultado', noPuede: 'No puede jugar', anulado: 'Anulado' }[c.status];
     const w = c.status === 'jugado' ? c.winner : c.status === 'noPuede' ? (c.noPuede === c.a ? c.b : c.a) : null;
     const f = (id, p, side) => `<div class="fighter ${side} ${w === id ? 'win' : w ? 'lose' : ''}"><div class="p">#${p}</div><div class="n">${esc(nm(id))}${w === id ? ' ✔' : ''}</div></div>`;
@@ -333,10 +333,12 @@
     else if (mine && c.status === 'jugado' && c.reportedBy === me.id) acts = `<div class="row" style="margin-top:12px"><button class="btn" data-act="resultSheet" data-id="${c.id}">✏️ Corregir resultado</button></div>`;
     const dl = isLive() && c.status === 'pendiente' && c.deadline ? `<div class="small muted" style="margin-top:8px">⏱ Plazo para jugar: hasta el ${esc(fmtTs(c.deadline))}</div>` : '';
     const body = `${c.score ? `<div class="score">${esc(c.score)}</div>` : ''}${dl}${mine && c.status === 'pendiente' ? steps(c) : ''}${acts}`;
-    return `<div class="duel st-${c.status} ${mine ? 'mine' : ''}"><div class="tag"><span>${mine ? '⭐ Tu reto · ' : ''}${typeTxt}</span><span class="pill ${c.status}">${label}</span></div>
+    const when = c.createdAt ? `<div class="dwhen"><span>Lanzado ${esc(fmtTs(c.createdAt))}</span>${idx != null ? `<b>Nº ${idx + 1}</b>` : ''}</div>` : '';
+    return `<div class="duel st-${c.status} ${mine ? 'mine' : ''}" ${idx != null ? `style="--ac:${DUEL_AC[idx % DUEL_AC.length]}"` : ''}><div class="tag"><span>${mine ? '⭐ Tu reto · ' : ''}${typeTxt}</span><span class="pill ${c.status}">${label}</span></div>
       <div class="vsrow">${f(c.a, c.pa, 'l')}<div class="vsb">VS</div>${f(c.b, c.pb, 'r')}</div>
-      ${body ? `<div class="body">${body}</div>` : ''}</div>`;
+      ${body ? `<div class="body">${body}</div>` : ''}${when}</div>`;
   }
+  const DUEL_AC = ['#ffb347', '#4fd1ff', '#ff6fa8', '#b8f23a', '#ffd84d', '#9b8cff'];
 
 
   // Trofeos del podio: oro, plata y bronce con degradado metálico
@@ -401,8 +403,9 @@
   function duelGrid() {
     const q = norm((ui.dq || '').trim()), inMine = (c) => me && (c.a === me.id || c.b === me.id);
     const order = { pendiente: 0, jugado: 1, noPuede: 2, sinResultado: 3, anulado: 4 };
-    const list = S.challenges.slice().sort((x, y) => (inMine(y) - inMine(x)) || (order[x.status] - order[y.status])).filter((c) => !q || norm(nm(c.a) + ' ' + nm(c.b) + ' ' + (c.score || '')).includes(q));
-    return list.length ? `<div class="grid">${list.map((c) => duelCard(c, !!inMine(c))).join('')}</div>` : `<div class="card empty"><h2>Sin resultados</h2><p>No hay retos con «${esc(ui.dq.trim())}».</p></div>`;
+    const all = S.challenges.filter((c) => c.status !== 'anulado'), num = new Map(all.map((c, i) => [c.id, i]));
+    const list = S.challenges.slice().sort((x, y) => (inMine(y) - inMine(x)) || (order[x.status] - order[y.status]) || (new Date(x.createdAt || 0) - new Date(y.createdAt || 0))).filter((c) => !q || norm(nm(c.a) + ' ' + nm(c.b) + ' ' + (c.score || '')).includes(q));
+    return list.length ? `<div class="grid">${list.map((c) => duelCard(c, !!inMine(c), num.has(c.id) ? num.get(c.id) : null)).join('')}</div>` : `<div class="card empty"><h2>Sin resultados</h2><p>No hay retos con «${esc(ui.dq.trim())}».</p></div>`;
   }
   document.addEventListener('input', (e) => {
     if (e.target.id !== 'dq') return;
@@ -469,7 +472,7 @@
     return `<article class="news full"><div class="news-meta"><span class="news-tag res">Resultado</span><time>${ago(st.newsAt)}</time></div>
       <h3 class="news-h">${esc(head)}</h3>
       <div class="news-vs"><div class="news-side a ${w === st.a ? 'w' : ''}"><small>#${st.pa}</small><b>${w === st.a ? trophySvg : ''}${esc(A)}</b></div><div class="news-score">${st.score ? esc(st.score) : 'VS'}</div><div class="news-side b ${w === st.b ? 'w' : ''}"><small>#${st.pb}</small><b>${w === st.b ? trophySvg : ''}${esc(B)}</b></div></div>
-      <div class="news-line">${esc(w === st.a ? 'El retador se lleva el reto' : 'El retado se defiende')} · reto lanzado ${esc(fmtTs(st.createdAt))}${st.resultAt ? ` · resultado ${esc(fmtTs(st.resultAt))}` : ''}</div>
+      <div class="news-line"><span>${esc(w === st.a ? 'El retador se lleva el reto' : 'El retado se defiende')}</span><span>Lanzado ${esc(fmtTs(st.createdAt))}${st.resultAt ? ` · Jugado ${esc(fmtTs(st.resultAt))}` : ''}</span></div>
       ${quote(st.commentA, A, 'a')}${quote(st.commentB, B, 'b')}
       ${mine ? `<div class="news-cta"><button class="btn sm ${myCm ? '' : 'go'}" data-act="commentSheet" data-id="${st.id}">${myCm ? 'Editar mi comentario' : 'Cuenta cómo fue el partido'}</button></div>` : ''}</article>`;
   }

@@ -388,3 +388,35 @@ nav button.locked .lk { position: absolute; top: 3px; right: calc(50% - 22px); c
 
 .credit{margin:10px 0 0;font:500 12px Inter,sans-serif;letter-spacing:.04em;color:#7f9a8b;opacity:.75;text-align:center}.credit b{color:#a8c3b3;font-weight:600}
 .credit{font-size:14px;color:#a9c4b4;opacity:1}.credit b{color:#d4f53c;font-weight:700}
+/* lista de retos: tarjetas compactas */
+#duelGrid .grid{gap:10px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+#duelGrid .duel{border-width:1px;box-shadow:0 3px 12px rgba(0,0,0,.3)}
+#duelGrid .duel .tag{padding:5px 10px;font-size:11px;letter-spacing:.14em}
+#duelGrid .duel .tag .pill{font-size:10px;padding:1px 8px}
+#duelGrid .duel .fighter{padding:8px 10px;min-height:0;gap:3px}
+#duelGrid .duel .fighter.l{padding-right:22px}#duelGrid .duel .fighter.r{padding-left:22px}
+#duelGrid .duel .fighter .p{font-size:12px;padding:0 8px}
+#duelGrid .duel .fighter .n{font-size:clamp(16px,4.2vw,19px)}
+#duelGrid .duel .vsb{width:30px;height:30px;font-size:14px;border-width:2px;box-shadow:0 0 0 3px #0a261c}
+#duelGrid .duel .body{padding:6px 10px 9px}
+#duelGrid .duel .score{font-size:17px}
+#duelGrid .duel .body .row{margin-top:8px !important}
+#duelGrid .duel .btn{padding:7px 12px;font-size:14px}
+
+/* retos: cada tarjeta con su color de acento y su fecha */
+#duelGrid .duel{border-top:4px solid var(--ac,#d4f53c);transition:transform .15s,box-shadow .15s}
+#duelGrid .duel:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.45),0 0 0 1px var(--ac,#d4f53c)}
+#duelGrid .duel:not(.mine) .tag{background:linear-gradient(90deg,color-mix(in srgb,var(--ac,#d4f53c) 28%,#03130e),#03130e 70%)}
+#duelGrid .duel:not(.mine) .tag>span:first-child{color:var(--ac,#ff9a63)}
+.dwhen{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;font-size:12px;color:#b7cdbf;background:rgba(0,0,0,.28)}
+.dwhen b{font:800 12px var(--display);letter-spacing:.08em;color:var(--ac,#d4f53c)}
+/* noticias: resultado más compacto y legible */
+.news.full{padding:10px 12px}
+.news.full .news-h{font-size:17px;margin:2px 0 4px;letter-spacing:.02em}
+.news.full .news-tag{font-size:11px}.news.full time{font-size:13px;color:#b7cdbf}
+.news.full .news-vs{margin:4px 0;gap:8px}
+.news.full .news-side{padding:6px 10px}.news.full .news-side b{font-size:18px}.news.full .news-side small{font-size:13px;opacity:1}
+.news.full .news-score{font-size:21px}
+.news.full .news-line{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;font-size:13px;color:#c3d6ca;margin:5px 0 0}
+.news.full .news-q{margin-top:7px;padding:8px 11px;font-size:15px;line-height:1.35;color:#f2fff6;background:rgba(0,0,0,.32)}
+.news.full .news-q b{font-size:12px}.news.full .news-cta{margin-top:7px}
