@@ -433,7 +433,7 @@
     if (!r || r.error) return;
     ui.news = more && ui.news ? { stories: ui.news.stories.concat(r.stories), notes: ui.news.notes.concat(r.notes) } : { stories: r.stories, notes: r.notes };
     ui.newsMore = r.stories.length >= 30; ui.newsExpanded = !!more || (ui.newsExpanded && !!more);
-    if (ui.tab === 'hist') render();
+    if (ui.tab === 'hist') { const f = document.getElementById('newsFeed'); if (f && ui.q) f.innerHTML = newsFeed(); else render(); }
   }
   const trophySvg = '<svg class="tr" viewBox="0 0 32 32" width="32" height="32" aria-label="Ganador"><path d="M9 4h14v7.2a7 7 0 0 1-14 0V4Z" fill="#0c2316"/><path d="M9 7H4.6v2.1a5.6 5.6 0 0 0 5.1 5.6M23 7h4.4v2.1a5.6 5.6 0 0 1-5.1 5.6" fill="none" stroke="#0c2316" stroke-width="2.3" stroke-linecap="round"/><path d="M16 18.2v4.4" stroke="#0c2316" stroke-width="2.6" stroke-linecap="round"/><path d="M11.6 22.4h8.8l1.2 2.2H10.4l1.2-2.2Z" fill="#0c2316"/><rect x="9.2" y="24.6" width="13.6" height="3.4" rx="1.3" fill="#0c2316"/><path d="M16 6.2l1.45 3 3.3.45-2.4 2.3.6 3.25L16 13.6l-2.95 1.6.6-3.25-2.4-2.3 3.3-.45L16 6.2Z" fill="#eaff68"/></svg>';
   function newsCard(st) {
@@ -472,17 +472,30 @@
     return `<article class="news"><div class="news-meta"><span class="news-tag aviso">Ranking</span><time>${ago(n.at)}</time></div><p style="margin:0;font-size:16px">Periodo ${esc(d.period)} cerrado: nuevo ranking publicado.</p></article>`;
   }
   function vHist() {
-    const head = '<div class="row between" style="padding:0 4px 10px"><h2 style="font-size:30px">Noticias del torneo</h2></div>';
+    const head = '<div class="row between" style="padding:0 4px 10px"><h2 style="font-size:30px">Noticias del torneo</h2></div>' + `<div class="searchbar"><input id="nq" type="search" placeholder="Buscar jugador, marcador o comentario…" value="${esc(ui.q || '')}" autocomplete="off"></div>`;
+    return head + '<div id="newsFeed">' + newsFeed() + '</div>' + `<details class="legend card" style="margin-top:14px"><summary>Archivo de movimientos del ranking</summary>${vArchive()}</details>`;
+  }
+  const norm = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  function newsFeed() {
     let feed;
+    const q = norm((ui.q || '').trim());
     if (!ui.news) feed = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
     else {
-      const week = now() - 7 * 864e5, pinnedNotes = ui.news.notes.filter((x) => x.kind === 'notice' && new Date(x.at).getTime() > week);
-      const items = ui.news.stories.filter((x) => x.status === 'jugado').map((x) => ({ t: new Date(x.newsAt).getTime(), h: newsCard(x) })).concat(ui.news.notes.filter((x) => x.kind === 'notice' && !pinnedNotes.includes(x)).map((x) => ({ t: new Date(x.at).getTime(), h: noteCard(x) }))).sort((p, q) => q.t - p.t);
+      const week = now() - 7 * 864e5, pinnedNotes = ui.news.notes.filter((x) => x.kind === 'notice' && new Date(x.at).getTime() > week && (!q || norm(x.data && x.data.text).includes(q)));
+      const hit = (x) => !q || norm([x.an, x.bn, x.score, x.commentA && x.commentA.text, x.commentB && x.commentB.text].join(' ')).includes(q);
+      const items = ui.news.stories.filter((x) => x.status === 'jugado' && hit(x)).map((x) => ({ t: new Date(x.newsAt).getTime(), h: newsCard(x) })).concat(ui.news.notes.filter((x) => x.kind === 'notice' && !pinnedNotes.includes(x) && (!q || norm(x.data && x.data.text).includes(q))).map((x) => ({ t: new Date(x.at).getTime(), h: noteCard(x) }))).sort((p, q) => q.t - p.t);
       const top = pinnedNotes.sort((p, q) => new Date(q.at) - new Date(p.at)).map((x) => noteCard(x, true));
-      feed = items.length || top.length ? top.join('') + items.map((x) => x.h).join('') + (ui.newsMore ? '<div style="text-align:center"><button class="btn" data-act="moreNews">Ver noticias anteriores</button></div>' : '') : '<div class="card empty"><h2>Todavía no hay noticias</h2><p>Aquí saldrán los resultados de los partidos con los comentarios de los jugadores, y los avisos del juez.</p></div>';
+      feed = items.length || top.length ? top.join('') + items.map((x) => x.h).join('') + (ui.newsMore ? (q ? '<p class="muted small" style="text-align:center">Buscando en noticias anteriores…</p>' : '<div style="text-align:center"><button class="btn" data-act="moreNews">Ver noticias anteriores</button></div>') : '') : q ? `<div class="card empty"><h2>Sin resultados</h2><p>No hay nada que coincida con «${esc(ui.q.trim())}».</p></div>` : '<div class="card empty"><h2>Todavía no hay noticias</h2><p>Aquí saldrán los resultados de los partidos con los comentarios de los jugadores, y los avisos del juez.</p></div>';
     }
-    return head + feed + `<details class="legend card" style="margin-top:14px"><summary>Archivo de movimientos del ranking</summary>${vArchive()}</details>`;
+    return feed;
   }
+  let nqT;
+  document.addEventListener('input', (e) => {
+    if (e.target.id !== 'nq') return;
+    ui.q = e.target.value;
+    const f = document.getElementById('newsFeed'); if (f) f.innerHTML = newsFeed();
+    clearTimeout(nqT); if (ui.q.trim() && ui.newsMore) nqT = setTimeout(async function more() { if (ui.q.trim() && ui.newsMore && ui.tab === 'hist') { await loadNews(true); setTimeout(more, 0); } }, 300);
+  });
   function vArchive() {
     if (isLive()) {
       const mv = S.movements || [];

@@ -379,3 +379,5 @@ nav button { position: relative; }
 nav button.locked { opacity: .55; } nav button.locked .ico { filter: grayscale(.9); }
 nav button.locked .lk { position: absolute; top: 3px; right: calc(50% - 22px); color: #fff; background: #1b2e25; border-radius: 50%; padding: 2px; width: 17px; height: 17px; }
 .lockcard { padding: 34px 16px; }
+
+.searchbar{padding:0 4px 12px}.searchbar input{width:100%;box-sizing:border-box;padding:13px 16px;border-radius:14px;border:1px solid rgba(212,245,60,.35);background:rgba(6,36,27,.8);color:#fff;font:500 16px Inter,sans-serif;outline:none}.searchbar input:focus{border-color:#d4f53c;box-shadow:0 0 0 3px rgba(212,245,60,.18)}.searchbar input::placeholder{color:#9db8a8}
