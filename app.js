@@ -32,13 +32,31 @@
   let firstLoad = true, prevPos = {};
 
   // ---------- API ----------
+  // Traduce los errores de la base de datos a mensajes entendibles
+  function friendlyDbError(j) {
+    const m = String((j && (j.message || j.hint)) || '');
+    if (/players_pin_format/.test(m)) return 'El PIN debe tener 4 cifras';
+    if (/players_name_not_blank/.test(m)) return 'Falta el nombre del jugador';
+    if (/players_pos_unique/.test(m)) return 'Esa posición ya está ocupada; inténtalo de nuevo';
+    if (/challenges_distinct_players/.test(m)) return 'Retador y retado no pueden ser el mismo jugador';
+    if (/invalid input syntax|date\/time/.test(m)) return 'Hay un dato con formato no válido';
+    return m ? 'No se pudo completar la operación (' + m.slice(0, 120) + ')' : 'No se pudo completar la operación';
+  }
   async function rpc(fn, args) {
-    const r = await fetch(`${CFG.url}/rest/v1/rpc/${fn}`, {
-      method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' },
-      body: JSON.stringify(args || {}),
-    });
-    if (!r.ok) throw new Error('Error de conexión (' + r.status + ')');
-    return r.json();
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);
+    let r;
+    try {
+      r = await fetch(`${CFG.url}/rest/v1/rpc/${fn}`, {
+        method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' },
+        body: JSON.stringify(args || {}), signal: ctl.signal,
+      });
+    } catch (e) { throw new Error('Sin conexión'); } finally { clearTimeout(timer); }
+    let j = null; try { j = await r.json(); } catch (e) { /* respuesta vacía */ }
+    if (!r.ok) {
+      if (r.status >= 500 || r.status === 429) throw new Error('Servidor ocupado (' + r.status + ')');
+      return { error: friendlyDbError(j) };
+    }
+    return j;
   }
   const admin = (op, args) => rpc('tenis_admin', { p_pwd: adminPwd, p_op: op, p_args: args || {} });
   const creds = () => ({ p_id: me && me.id, p_pin: me && me.pin });
@@ -121,29 +139,29 @@
 
   function duelOverlay(a, b, mode) {
     const incoming = mode === 'incoming';
-    overlay(`<div class="ovt">${incoming ? '¡Te han retado!' : '¡Reto lanzado!'}</div>
+    overlay(`<div class="ovt">${incoming ? 'Te han retado' : 'Reto lanzado'}</div>
       <div class="stage"><div class="f l"><div class="p">#${a.pos}</div><div class="n">${esc(a.name)}</div></div><div class="vsx">VS</div>
       <div class="f r"><div class="p">#${b.pos}</div><div class="n">${esc(b.name)}</div></div></div>
       <div class="sub">${incoming ? `${esc(firstName(a.name))} te ha retado. Mira tu WhatsApp para fijar fecha y hora, ¡y prepárate!` : `Ahora avisa al grupo y al rival por privado. Tenéis hasta el ${esc(fmtDeadline(S.period.deadline))}.`}</div>
       <button class="btn go big" data-act="closeOv">${incoming ? 'A por él' : 'Seguir'}</button>`, incoming ? 'incoming' : '', true);
   }
   function resultOverlay(win, winnerName, loserName, score) {
-    overlay(`<div class="trophy">${win ? '🏆' : '💪'}</div><div class="ovt">${win ? '¡Victoria!' : 'Derrota'}</div>
+    overlay(`<div class="trophy">Resultado</div><div class="ovt">${win ? 'Victoria' : 'Derrota'}</div>
       <div class="sub">${win ? `Has ganado a ${esc(loserName)}${score ? ' (' + esc(score) + ')' : ''}. El ranking se actualizará al cierre del periodo.` : `${esc(winnerName)} se lleva este reto${score ? ' (' + esc(score) + ')' : ''}. ¡La revancha llegará!`}</div>
       <button class="btn go big" data-act="closeOv">Vale</button>`, win ? '' : 'lose', win);
   }
 
   // ---------- eventos en vivo ----------
   function evText(e) {
-    const d = e.data;
+    const d = e.data, k = (t) => `<span class="evk">${t}</span>`;
     switch (e.kind) {
-      case 'challenge': return `⚔️ <b>${esc(d.a.name)}</b> (#${d.a.pos}) reta a <b>${esc(d.b.name)}</b> (#${d.b.pos})${d.type === 'inverso' ? ' · reto inverso' : d.dist > 5 ? ` · a ${d.dist} puestos` : ''}`;
-      case 'result': return `🏆 <b>${esc(d.winner)}</b> gana a ${esc(d.loser)}${d.score ? ' · ' + esc(d.score) : ''}`;
-      case 'cant_play': return `🚫 <b>${esc(d.name)}</b> no puede disputar su reto`;
-      case 'window': return d.day ? `🟢 <b>¡Retos abiertos!</b> ${d.day === 3 ? 'Pueden retar todos' : 'Día ' + d.day}` : '🔒 Retos cerrados';
-      case 'close': return `📊 <b>Periodo ${d.period} cerrado.</b> ¡Nuevo ranking publicado!`;
-      case 'notice': return `📢 ${esc(d.text)}`;
-      case 'ranking': return `📊 <b>Ranking actualizado:</b> ${esc(d.reason || '')}${d.changes && d.changes.length ? ' · ' + d.changes.slice(0, 3).map((x) => `${esc(x.name)} ${x.from}→${x.to}`).join(', ') : ''}`;
+      case 'challenge': return `${k('Reto')}<b>${esc(d.a.name)}</b> (#${d.a.pos}) reta a <b>${esc(d.b.name)}</b> (#${d.b.pos})${d.type === 'inverso' ? ' · reto inverso' : d.dist > 5 ? ` · a ${d.dist} puestos` : ''}`;
+      case 'result': return `${k('Resultado')}<b>${esc(d.winner)}</b> gana a ${esc(d.loser)}${d.score ? ' · ' + esc(d.score) : ''}`;
+      case 'cant_play': return `${k('Baja')}<b>${esc(d.name)}</b> no puede disputar su reto`;
+      case 'window': return d.day ? `${k('Retos')}<b>Abiertos.</b> ${d.day === 3 ? 'Pueden retar todos' : 'Día ' + d.day}` : `${k('Retos')}Cerrados`;
+      case 'close': return `${k('Ranking')}<b>Periodo ${d.period} cerrado.</b> Nuevo ranking publicado`;
+      case 'notice': return `${k('Aviso')}${esc(d.text)}`;
+      case 'ranking': return `${k('Ranking')}${esc(d.reason || '')}${d.changes && d.changes.length ? ' · ' + d.changes.slice(0, 3).map((x) => `${esc(x.name)} ${x.from}→${x.to}`).join(', ') : ''}`;
       default: return esc(e.kind);
     }
   }
@@ -165,9 +183,15 @@
   }
 
   // ---------- carga ----------
+  let refreshSeq = 0, refreshBusy = false, pollFails = 0, nextPollAt = 0, offlineShown = false;
   async function refresh(force) {
+    if (refreshBusy && !force) return;
+    const seq = ++refreshSeq; refreshBusy = true;
     try {
       const data = await rpc('tenis_state', creds());
+      if (seq !== refreshSeq) return;                                   // llegó una respuesta más reciente
+      if (data && data.error) throw new Error(data.error);
+      pollFails = 0; nextPollAt = 0; if (offlineShown) { offlineShown = false; toast('Conexión recuperada'); }
       clockOffset = new Date(data.now).getTime() - Date.now();
       if (me && data.me && data.me.error) {
         // Solo se cierra la sesión si el PIN ya no es válido (cambiado por el juez o desde otro dispositivo), confirmado dos veces seguidas.
@@ -177,7 +201,7 @@
           if (ui.badPin >= 2) { toast('Tu PIN ya no es válido (¿lo han cambiado?). Entra de nuevo con el PIN nuevo.', 'err'); me = null; clearSession(); ui.badPin = 0; }
         }
       }
-      if (adminPwd) { const a = await admin('state'); if (a.error) { adminPwd = null; try { sessionStorage.removeItem('hegemon.admin'); } catch (e) { /* */ } } else A = a; }
+      if (adminPwd) { const a = await admin('state').catch(() => ({ _net: true })); if (a._net) { /* sin red: se mantiene lo último */ } else if (a.error) { adminPwd = null; try { sessionStorage.removeItem('hegemon.admin'); } catch (e) { /* */ } } else A = a; }
       if (data.me && !data.me.error) ui.badPin = 0;
       const sig = JSON.stringify([data.players, data.challenges, data.config, data.period, data.events.length && data.events[0].id, data.bracket, data.finalRanking, data.me, A && [A.players.length, A.snapshots, A.periods.length]]);
       const changed = sig !== lastSig; lastSig = sig;
@@ -186,8 +210,10 @@
       if (me && data.me && !data.me.error && data.me.notifLast && data.me.notifLast !== ui.notifFetched && !ui.notifBusy) { ui.notifBusy = true; ui.notifFetched = data.me.notifLast; setTimeout(() => { fetchNotifs().finally(() => { ui.notifBusy = false; }); }, 0); }
       if (changed || force) render(old);
     } catch (e) {
+      pollFails++; nextPollAt = Date.now() + Math.min(60000, 5000 * 2 ** Math.min(pollFails, 4));   // espera creciente: 10 s, 20 s, 40 s, 60 s
+      if (S && !offlineShown && pollFails >= 2) { offlineShown = true; toast('Sin conexión: se muestran los últimos datos', 'err'); }
       if (!S) $('#view').innerHTML = `<div class="card empty"><h2>Sin conexión</h2><p>No se pudo cargar el torneo. Revisa tu internet.</p><button class="btn go" data-act="retry">Reintentar</button></div>`;
-    }
+    } finally { if (seq === refreshSeq) refreshBusy = false; }
   }
 
   // ---------- render ----------
@@ -242,7 +268,7 @@
     const pending = active.filter((c) => c.status === 'pendiente').length;
     const live = isLive();
     const status = `<span class="status ${open ? 'open' : ''}"><i></i>${live ? (open ? 'Ranking vivo · retos abiertos' : 'Retos en pausa') : open ? `Retos abiertos · ${day === 3 ? 'pueden retar todos' : 'día ' + day}` : 'Retos cerrados'}</span>`;
-    const cd = live ? `<div class="small muted" style="margin-top:8px">El ranking se actualiza en cuanto se apunta cada resultado. Plazo para jugar un reto: ${S.config.challengeDays} días.</div>` : `<div class="small muted" style="margin-top:8px">⏱ Fin del periodo: <b data-countdown="${S.period.deadline}">${countdown(S.period.deadline)}</b> · ${esc(fmtDeadline(S.period.deadline))}</div>`;
+    const cd = live ? `<div class="small muted" style="margin-top:8px">El ranking se actualiza en cuanto se apunta cada resultado. Plazo para jugar un reto: ${S.config.challengeDays} días.</div>` : `<div class="small muted" style="margin-top:8px">Fin del periodo: <b data-countdown="${S.period.deadline}">${countdown(S.period.deadline)}</b> · ${esc(fmtDeadline(S.period.deadline))}</div>`;
     let hero;
     if (mp) {
       const mc = myChal();
@@ -251,10 +277,10 @@
       hero = `<section class="hero"><div class="kick">Hola, ${esc(firstName(mp.name))}</div>
         <div class="bigpos">#${mp.pos}<small>de ${S.players.length}</small></div>
         <div class="row" style="margin:6px 0 10px">${status}${mp.blocked ? '<span class="pill">⛔ No retable</span>' : ''}${mp.rp ? '<span class="pill">🛡️ Ranking protegido</span>' : ''}</div>${live && !mc ? (() => { const st = stageOf(mp); const txt = { espera: `No puedes retar ni te pueden retar hasta el ${fmtTs(st.until)}.`, protegido: `Puedes retar. Nadie puede retarte hasta el ${fmtTs(st.until)}.`, retable: `Te pueden retar. Tú podrás retar desde el ${fmtTs(st.until)}.`, libre: 'Puedes retar y te pueden retar.' }[st.k]; return `<div class="stage-box st-${st.k}"><b>${st.icon} ${st.label}</b><span>${esc(txt)}</span></div>`; })() : ''}
-        ${canTry ? '<button class="btn go big" data-act="picker">⚔️ ¡Retar a alguien!</button>' : ''}
+        ${canTry ? '<button class="btn go big" data-act="picker">Retar a alguien</button>' : ''}
         ${!mc && !open ? '<p>Cuando el juez abra los retos podrás lanzar el tuyo desde aquí.</p>' : ''}
         ${!mc && open && (mp.blocked || mp.rp) ? '<p>Ahora mismo no estás disponible para retar.</p>' : ''}
-        ${cd}</section>${S.me && !S.me.error && pushInfo && !pushInfo.on && (pushInfo.supported ? pushInfo.permission !== 'denied' : pushInfo.needsInstall) && !store.get('hegemon.pushHint') ? `<div class="card" style="border-color:var(--ball)"><h2>🔔 Activa los avisos</h2><p class="muted">Te avisamos en el móvil cuando te reten o te apunten un resultado, aunque la web esté cerrada.${pushInfo.needsInstall ? ' En iPhone, primero añade la web a la pantalla de inicio.' : ''}</p><div class="row"><button class="btn go" data-act="who">Configurar avisos</button><button class="btn" data-act="dismissPush">Ahora no</button></div></div>` : ''}${S.me && !S.me.error && !S.me.phone ? `<div class="card" style="border-color:var(--ball)"><h2>📱 Añade tu teléfono</h2><p class="muted">Así tu rival podrá escribirte por WhatsApp para quedar. Solo lo verán el juez y quien tenga un reto contigo.</p><button class="btn go" data-act="who">Añadir mi móvil</button></div>` : ''}${mc ? myDuel(mc) : ''}`;
+        ${cd}</section>${S.me && !S.me.error && pushInfo && !pushInfo.on && (pushInfo.supported ? pushInfo.permission !== 'denied' : pushInfo.needsInstall) && !store.get('hegemon.pushHint') ? `<div class="card" style="border-color:var(--ball)"><h2>Activa los avisos</h2><p class="muted">Te avisamos en el móvil cuando te reten o te apunten un resultado, aunque la web esté cerrada.${pushInfo.needsInstall ? ' En iPhone, primero añade la web a la pantalla de inicio.' : ''}</p><div class="row"><button class="btn go" data-act="who">Configurar avisos</button><button class="btn" data-act="dismissPush">Ahora no</button></div></div>` : ''}${S.me && !S.me.error && !S.me.phone ? `<div class="card" style="border-color:var(--ball)"><h2>Añade tu teléfono</h2><p class="muted">Así tu rival podrá escribirte por WhatsApp para quedar. Solo lo verán el juez y quien tenga un reto contigo.</p><button class="btn go" data-act="who">Añadir mi móvil</button></div>` : ''}${mc ? myDuel(mc) : ''}`;
     } else {
       hero = `<section class="hero"><div class="kick">Torneo social de tenis · ${esc(S.config.season)}</div>
         <h1>${esc(S.config.title)}</h1><p>Escala el ranking retando a quien tienes por encima. Entra con tu PIN para lanzar retos y apuntar resultados.</p>
@@ -293,11 +319,11 @@
     const f = (id, p, side) => `<div class="fighter ${side} ${w === id ? 'win' : w ? 'lose' : ''}"><div class="p">#${p}</div><div class="n">${esc(nm(id))}${w === id ? ' ✔' : ''}</div></div>`;
     const typeTxt = c.type === 'inverso' ? 'Reto inverso' : c.dist > 5 ? `Reto a ${c.dist} puestos` : 'Reto';
     let acts = '';
-    if (mine && c.status === 'pendiente') acts = `<div class="row" style="margin-top:12px"><button class="btn go big" data-act="resultSheet" data-id="${c.id}">📝 Registrar resultado</button><button class="btn danger" data-act="cantSheet" data-id="${c.id}">No puedo jugar</button></div>`;
-    else if (mine && c.status === 'jugado' && c.reportedBy === me.id) acts = `<div class="row" style="margin-top:12px"><button class="btn" data-act="resultSheet" data-id="${c.id}">✏️ Corregir resultado</button></div>`;
-    const dl = isLive() && c.status === 'pendiente' && c.deadline ? `<div class="small muted" style="margin-top:8px">⏱ Plazo para jugar: hasta el ${esc(fmtTs(c.deadline))}</div>` : '';
+    if (mine && c.status === 'pendiente') acts = `<div class="row" style="margin-top:12px"><button class="btn go big" data-act="resultSheet" data-id="${c.id}">Registrar resultado</button><button class="btn danger" data-act="cantSheet" data-id="${c.id}">No puedo jugar</button></div>`;
+    else if (mine && c.status === 'jugado' && c.reportedBy === me.id) acts = `<div class="row" style="margin-top:12px"><button class="btn" data-act="resultSheet" data-id="${c.id}">Corregir resultado</button></div>`;
+    const dl = isLive() && c.status === 'pendiente' && c.deadline ? `<div class="small muted" style="margin-top:8px">Plazo para jugar: hasta el ${esc(fmtTs(c.deadline))}</div>` : '';
     const body = `${c.score ? `<div class="score">${esc(c.score)}</div>` : ''}${dl}${mine && c.status === 'pendiente' ? steps(c) : ''}${acts}`;
-    return `<div class="duel st-${c.status} ${mine ? 'mine' : ''}"><div class="tag"><span>${mine ? '⭐ Tu reto · ' : ''}${typeTxt}</span><span class="pill ${c.status}">${label}</span></div>
+    return `<div class="duel st-${c.status} ${mine ? 'mine' : ''}"><div class="tag"><span>${mine ? 'Tu reto · ' : ''}${typeTxt}</span><span class="pill ${c.status}">${label}</span></div>
       <div class="vsrow">${f(c.a, c.pa, 'l')}<div class="vsb">VS</div>${f(c.b, c.pb, 'r')}</div>
       ${body ? `<div class="body">${body}</div>` : ''}</div>`;
   }
@@ -310,7 +336,7 @@
     const badges = (p) => (S.config.challengeDay === 1 && pchd.has(p.id) ? '<span class="badge p" title="Retado el periodo anterior">P</span>' : '') + (p.down ? '<span class="badge">🔽</span>' : '') +
       (p.blocked ? '<span class="badge">⛔ no retable</span>' : '') + (p.rp ? '<span class="badge">🛡️ RP</span>' : '');
     const top = S.players.slice(0, 3);
-    const podium = !q && top.length === 3 ? `<div class="podium">${[1, 0, 2].map((i) => { const p = top[i]; return `<div class="pod g${i + 1} ${isMe(p.id) ? 'me' : ''}" data-flip="${p.id}"><div class="medal">${['🥇', '🥈', '🥉'][i]}</div><div class="num">${p.pos}</div><div class="n">${esc(p.name)}</div>${inChal[p.id] ? '<div class="small" style="color:var(--clay)">⚔️ en reto</div>' : ''}</div>`; }).join('')}</div>` : '';
+    const podium = !q && top.length === 3 ? `<div class="podium">${[1, 0, 2].map((i) => { const p = top[i]; return `<div class="pod g${i + 1} ${isMe(p.id) ? 'me' : ''}" data-flip="${p.id}"><div class="medal"></div><div class="num">${p.pos}</div><div class="n">${esc(p.name)}</div>${inChal[p.id] ? '<div class="small" style="color:var(--clay)">⚔️ en reto</div>' : ''}</div>`; }).join('')}</div>` : '';
     let rows = '', lastZone = -1;
     S.players.forEach((p) => {
       if (!q && p.pos <= 3) return;
@@ -325,7 +351,7 @@
     const legend = isLive() ? `<details class="legend card"><summary>ℹ️ Qué significan los símbolos</summary>
       <p class="small muted" style="margin:8px 0">Al apuntarse un resultado el ranking se mueve al instante y cada jugador pasa por estas fases. Se renuevan cada día a las ${hr}.</p>
       <ul class="legend-list"><li><b>⏳ Esperando</b> · ${c0.waitBoth} días: no puede retar ni ser retado.</li><li><b>🛡️ Protegido</b> · el ganador, ${c0.winnerDays} días más: puede retar, pero nadie puede retarle.</li><li><b>🎯 Retable</b> · el perdedor, ${c0.loserDays} días más: pueden retarle, pero aún no puede retar.</li><li><b>🟢 Libre</b> · puede retar y ser retado.</li><li><b>⚔️ En reto</b> · tiene un reto en juego.</li></ul></details>` : '';
-    return legend + `<div class="card" style="padding:12px"><input type="search" id="filter" placeholder="🔎 Buscar jugador…" value="${esc(ui.filter)}" data-input="filter"></div>${podium}${rows || '<div class="empty">Sin resultados</div>'}`;
+    return legend + `<div class="card" style="padding:12px"><input type="search" id="filter" placeholder="Buscar jugador…" value="${esc(ui.filter)}" data-input="filter"></div>${podium}${rows || '<div class="empty">Sin resultados</div>'}`;
   }
 
   // --- Retos
@@ -335,7 +361,7 @@
     const order = { pendiente: 0, jugado: 1, noPuede: 2, sinResultado: 3, anulado: 4 };
     const inMine = (c) => me && (c.a === me.id || c.b === me.id);
     const sorted = cs.slice().sort((x, y) => (inMine(y) - inMine(x)) || (order[x.status] - order[y.status]));
-    const hint = !me ? '<div class="note" style="margin-bottom:12px">👋 Entra con tu PIN para apuntar el resultado de tu reto. <button class="btn sm go" data-act="who">Entrar</button></div>' : '';
+    const hint = !me ? '<div class="note" style="margin-bottom:12px">Entra con tu PIN para apuntar el resultado de tu reto. <button class="btn sm go" data-act="who">Entrar</button></div>' : '';
     return `<div class="row between" style="padding:0 4px 10px"><h2 style="font-size:28px">Periodo ${S.period.n} · ${cs.filter((c) => c.status !== 'anulado').length} retos</h2></div>
       ${hint}<div class="grid">${sorted.map((c) => duelCard(c, !!inMine(c))).join('')}</div>`;
   }
@@ -355,7 +381,7 @@
         return `<div class="match">${slot(m.a)}${slot(m.b)}</div>`;
       }).join('')}</div>`).join('');
       const champ = b.rounds[b.rounds.length - 1].matches[0].winner;
-      return `<div class="card"><h2>${names[gi] || (gi + 1) + '.ª división'} ${champ ? `<span class="badge p">🏆 ${esc(nm(champ))}</span>` : ''}</h2><div class="bracket">${cols}</div></div>`;
+      return `<div class="card"><h2>${names[gi] || (gi + 1) + '.ª división'} ${champ ? `<span class="badge p">Campeón: ${esc(nm(champ))}</span>` : ''}</h2><div class="bracket">${cols}</div></div>`;
     }).join('');
   }
 
@@ -380,7 +406,7 @@
   let deferredInstall = null, pushInfo = null;
   const isAndroid = /android/i.test(navigator.userAgent);
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; if (S) render(); });
-  window.addEventListener('appinstalled', () => { store.set('hegemon.installed', 1); deferredInstall = null; if (S) render(); toast('✅ Web instalada en tu pantalla de inicio'); });
+  window.addEventListener('appinstalled', () => { store.set('hegemon.installed', 1); deferredInstall = null; if (S) render(); toast('Web instalada en tu pantalla de inicio'); });
   const b64ToU8 = (b) => { const p = '='.repeat((4 - (b.length % 4)) % 4), r = atob((b + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map((c) => c.charCodeAt(0))); };
 
   async function pushStatus() {
@@ -399,18 +425,18 @@
   function profileSheet() {
     const ph = (S.me && S.me.phone) || '', ps = pushInfo || { supported: false }, canInstall = !!deferredInstall;
     let avisos;
-    if (ps.supported && ps.on) avisos = `<p class="small">✅ Activados en este dispositivo. Te avisaremos cuando te reten, te apunten un resultado o el juez abra los retos.</p><button class="btn" data-act="disablePush">Desactivar avisos</button>`;
+    if (ps.supported && ps.on) avisos = `<p class="small">Activados en este dispositivo. Te avisaremos cuando te reten, te apunten un resultado o el juez abra los retos.</p><button class="btn" data-act="disablePush">Desactivar avisos</button>`;
     else if (ps.supported && ps.permission === 'denied') avisos = `<div class="note small">Has bloqueado las notificaciones de esta web. Actívalas en los ajustes del navegador (candado junto a la dirección → Notificaciones) y vuelve aquí.</div>`;
-    else if (ps.supported) avisos = `<p class="small muted">Recibe un aviso en el móvil aunque la web esté cerrada.</p><button class="btn go" data-act="enablePush">🔔 Activar avisos</button>`;
+    else if (ps.supported) avisos = `<p class="small muted">Recibe un aviso en el móvil aunque la web esté cerrada.</p><button class="btn go" data-act="enablePush">Activar avisos</button>`;
     else if (ps.needsInstall) avisos = `<div class="note small">En iPhone los avisos solo funcionan con la web instalada. Pulsa <b>Compartir</b> (el cuadrado con la flecha) → <b>Añadir a pantalla de inicio</b>, abre la web desde ese icono y vuelve aquí.</div>`;
     else avisos = `<p class="small muted">Este navegador no permite avisos. Prueba con Chrome o Safari actualizados.</p>`;
-    const instalar = canInstall ? `<h3>📲 Instalar como app</h3><button class="btn" data-act="installApp">Añadir a la pantalla de inicio</button>` : (isIOS && !standalone ? `<h3>📲 Instalar como app</h3><p class="small muted">Compartir → Añadir a pantalla de inicio.</p>` : '');
+    const instalar = canInstall ? `<h3>Instalar como app</h3><button class="btn" data-act="installApp">Añadir a la pantalla de inicio</button>` : (isIOS && !standalone ? `<h3>Instalar como app</h3><p class="small muted">Compartir → Añadir a pantalla de inicio.</p>` : '');
     sheet(`<h2>${esc(nm(me.id))}</h2>
       <label for="myPhone">Tu móvil</label><input id="myPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="612345678" value="${esc(ph)}">
       <p class="muted small" style="margin:6px 0 0">Para que tu rival te escriba por WhatsApp. Solo lo ven el juez y quien tenga un reto contigo.</p>
       <div class="actions" style="margin-top:8px"><button class="btn go" data-act="savePhone">Guardar móvil</button></div>
-      <h3>🔔 Avisos en este dispositivo</h3>${avisos}${instalar}
-      <h3>🔑 Cambiar mi PIN</h3><div class="row"><div style="flex:1;min-width:120px"><label for="newPin">PIN nuevo (4 cifras)</label><input id="newPin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></div>
+      <h3>Avisos en este dispositivo</h3>${avisos}${instalar}
+      <h3>Cambiar mi PIN</h3><div class="row"><div style="flex:1;min-width:120px"><label for="newPin">PIN nuevo (4 cifras)</label><input id="newPin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></div>
         <div style="flex:1;min-width:120px"><label for="newPin2">Repítelo</label><input id="newPin2" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></div></div>
       <div class="actions" style="margin-top:8px"><button class="btn" data-act="savePin">Cambiar PIN</button></div>
       <div class="actions" style="margin-top:18px;border-top:1px solid var(--line);padding-top:12px"><button class="btn danger" data-act="logout" style="margin-right:auto">Cerrar sesión</button>${cancel}</div>`);
@@ -430,7 +456,7 @@
     if (isIOS) pasos = `<ol class="steps-list"><li>Abre esta página en <b>Safari</b> (en otros navegadores del iPhone puede no aparecer).</li><li>Pulsa <b>Compartir</b> ${shareSvg} (el cuadrado con la flecha, abajo en el centro).</li><li>Desliza hacia arriba y elige <b>Añadir a pantalla de inicio</b>.</li><li>Pulsa <b>Añadir</b>. Ya tienes el icono de la bola de tenis.</li></ol><div class="note small">Ábrela siempre desde ese icono: así los avisos llegan al móvil aunque la web esté cerrada.</div>`;
     else if (isAndroid) pasos = `<ol class="steps-list"><li>Abre esta página en <b>Chrome</b>.</li><li>Pulsa el menú <b>⋮</b> (los tres puntos, arriba a la derecha).</li><li>Elige <b>Instalar aplicación</b> o <b>Añadir a la pantalla de inicio</b>.</li><li>Confirma con <b>Instalar</b>. Aparecerá el icono de la bola de tenis.</li></ol><div class="note small">Ábrela desde ese icono: así los avisos llegan al móvil aunque la web esté cerrada.</div>`;
     else pasos = `<ol class="steps-list"><li>En Chrome o Edge, busca el icono de <b>instalar</b> al final de la barra de direcciones.</li><li>O abre el menú <b>⋮</b> → <b>Instalar Trofeo Hegemón</b>.</li></ol>`;
-    sheet(`<h2>📲 Instalar como app</h2><p class="muted small">Se queda en tu pantalla de inicio como una app más, sin tiendas ni descargas.</p>${pasos}<div class="actions"><button class="btn go" data-act="closeSheet">Entendido</button></div>`);
+    sheet(`<h2>Instalar como app</h2><p class="muted small">Se queda en tu pantalla de inicio como una app más, sin tiendas ni descargas.</p>${pasos}<div class="actions"><button class="btn go" data-act="closeSheet">Entendido</button></div>`);
   }
 
   // ---------- bandeja de avisos ----------
@@ -450,8 +476,8 @@
     return `<button class="avisos-btn ${n ? 'has-new' : ''}" data-act="avisos" aria-label="Avisos${n ? ', ' + n + ' sin leer' : ''}">${bellSvg}<span>Avisos</span>${n ? `<em class="bubble">${ui.notifItems ? n : '•'}</em>` : '<small>Sin novedades</small>'}</button>`;
   }
   function renderAvisos(items, seen) {
-    return `<h2>🔔 Avisos</h2>${items.length ? `<div class="notifs big">${items.map((n) => `<div class="notif ${n.id > seen ? 'new' : ''}"><b>${esc(n.title)}${n.id > seen ? ' <span class="badge p">NUEVO</span>' : ''}</b><span>${esc(n.body)}</span><time>${ago(n.at)}</time></div>`).join('')}</div>` : '<p class="muted">Todavía no tienes avisos. Aquí aparecerán cuando te reten, te apunten un resultado o el juez publique algo.</p>'}
-      <div class="actions"><button class="btn" data-act="who">⚙️ Avisos en el móvil</button><button class="btn go" data-act="closeSheet">Cerrar</button></div>`;
+    return `<h2>Avisos</h2>${items.length ? `<div class="notifs big">${items.map((n) => `<div class="notif ${n.id > seen ? 'new' : ''}"><b>${esc(n.title)}${n.id > seen ? ' <span class="badge p">NUEVO</span>' : ''}</b><span>${esc(n.body)}</span><time>${ago(n.at)}</time></div>`).join('')}</div>` : '<p class="muted">Todavía no tienes avisos. Aquí aparecerán cuando te reten, te apunten un resultado o el juez publique algo.</p>'}
+      <div class="actions"><button class="btn" data-act="who">Avisos en el móvil</button><button class="btn go" data-act="closeSheet">Cerrar</button></div>`;
   }
 
   // ---------- hojas ----------
@@ -553,20 +579,20 @@
     if (A.config.mode === 'vivo') {
       const open = day > 0;
       return `<div class="card"><h2>Ranking vivo activo</h2><p class="muted small">El ranking se actualiza solo en cuanto se apunta cada resultado (por los jugadores o por ti). No hay periodos ni días 1, 2 y 3. Los retos caducan a los ${A.config.challengeDays} días y se aplican como "sin resultado".</p>
-        <div class="seg"><button class="btn" data-act="setDay" data-v="3" aria-pressed="${open}">🟢 Retos abiertos</button><button class="btn" data-act="setDay" data-v="0" aria-pressed="${!open}">⏸ En pausa</button></div>
+        <div class="seg"><button class="btn" data-act="setDay" data-v="3" aria-pressed="${open}">Retos abiertos</button><button class="btn" data-act="setDay" data-v="0" aria-pressed="${!open}">En pausa</button></div>
         <p class="small muted" style="margin-top:8px">Los días de espera tras cada reto se cambian en Ajustes → Modo del torneo.</p></div>
       <div class="card"><h2>Retos en juego</h2><p><b>${chs.length}</b> retos · <b>${pend}</b> pendientes</p>
-        ${noMsg.length ? `<div class="note small">⚠️ Sin los dos mensajes (g): ${noMsg.map((c) => esc(aNm(c.challenger_id))).join(', ')}</div>` : ''}</div>
+        ${noMsg.length ? `<div class="note small">Atención: Sin los dos mensajes (g): ${noMsg.map((c) => esc(aNm(c.challenger_id))).join(', ')}</div>` : ''}</div>
       ${(() => { const inC = new Set(); chs.filter((c) => c.status === 'pendiente').forEach((c) => { inC.add(c.challenger_id); inC.add(c.challenged_id); }); const free = A.players.filter((p) => !p.blocked && !p.rp && !inC.has(p.id));
         return `<div class="card"><h2>Sin reto ahora (${free.length})</h2><div class="chips">${free.map((p) => `<span class="chip ok">${p.pos}. ${esc(p.name)}</span>`).join('') || '<span class="muted small">Todos tienen reto</span>'}</div></div>`; })()}
       <div class="card"><h2>Aviso a todos</h2><textarea id="notice" rows="2" maxlength="280" placeholder="Ej.: Esta semana llueve: se amplía el plazo"></textarea><div class="actions"><button class="btn go" data-act="notice">Publicar aviso</button></div></div>
       <div class="card"><h2>Copiar para WhatsApp</h2><div class="row"><button class="btn" data-act="copyRank">Ranking</button><button class="btn" data-act="copyChals">Lista de retos</button></div></div>`;
     }
     return `<div class="card"><h2>Ventana de retos</h2><p class="muted small">Decide quién puede retar ahora. Los jugadores lo ven al instante.</p>
-        <div class="seg">${[[0, '🔒 Cerrados'], [1, 'Día 1'], [2, 'Día 2'], [3, 'Día 3 · todos']].map(([d, l]) => `<button class="btn" data-act="setDay" data-v="${d}" aria-pressed="${day === d}">${l}</button>`).join('')}</div>
+        <div class="seg">${[[0, 'Cerrados'], [1, 'Día 1'], [2, 'Día 2'], [3, 'Día 3 · todos']].map(([d, l]) => `<button class="btn" data-act="setDay" data-v="${d}" aria-pressed="${day === d}">${l}</button>`).join('')}</div>
         <p class="small muted" style="margin-top:8px">Día 1: solo retan quienes no retaron el periodo anterior (los retados llevan P). Día 2: también quienes retaron y ganaron. Día 3: todos.</p></div>
       <div class="card"><h2>Periodo ${cp.n}</h2><p>${fmtDate(cp.start)} – ${fmtDate(cp.end)} · <b>${chs.length}</b> retos · <b>${pend}</b> pendientes</p>
-        ${noMsg.length ? `<div class="note small">⚠️ Sin los dos mensajes (g): ${noMsg.map((c) => esc(aNm(c.challenger_id))).join(', ')}</div>` : ''}
+        ${noMsg.length ? `<div class="note small">Atención: Sin los dos mensajes (g): ${noMsg.map((c) => esc(aNm(c.challenger_id))).join(', ')}</div>` : ''}
         <div class="row"><button class="btn" data-act="datesSheet">Cambiar fechas</button><button class="btn hot" data-act="closePreview">Cerrar periodo y actualizar ranking…</button><button class="btn" data-act="undo" ${A.snapshots ? '' : 'disabled'}>Deshacer último cierre</button></div></div>
       ${(() => { const inC = new Set(); chs.forEach((c) => { inC.add(c.challenger_id); inC.add(c.challenged_id); }); const free = A.players.filter((p) => !p.blocked && !p.rp && !inC.has(p.id));
         return `<div class="card"><h2>Sin reto este periodo (${free.length})</h2><p class="muted small">Jugadores disponibles que aún no están en ningún reto. Si se quedan sin rival, puedes emparejarlos a mano en Retos → Reto manual.</p>
@@ -581,7 +607,7 @@
       <td><b>${esc(p.name)}</b>${A.config.mode === 'vivo' ? (() => { const st = stageOf(p); return st.k === 'libre' ? '' : ` <span class="badge" title="${esc(st.tip)}">${st.icon} ${st.label} · ${esc(new Date(st.until).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' }))}</span>`; })() : ''}${p.blocked ? ' <span class="badge">⛔ no retable</span>' : ''}${p.rp ? ' <span class="badge">🛡️ RP</span>' : ''}${p.down ? ' <span class="badge">🔽</span>' : ''}${p.sin_pref ? ' <span class="badge">sin pref.</span>' : ''}<div class="small muted">${esc(p.phone || 'sin teléfono')}</div></td>
       <td class="pin">${esc(p.pin)}</td>
       <td class="aacts"><button class="btn sm" data-act="mvPlayer" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir">▲</button><button class="btn sm" data-act="mvPlayer" data-i="${i}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="Bajar">▼</button>
-        <button class="btn sm go" data-act="editPlayer" data-id="${p.id}">Editar</button><button class="btn sm" data-act="copyAccess" data-id="${p.id}">📲 Acceso</button></td></tr>`).join('');
+        <button class="btn sm go" data-act="editPlayer" data-id="${p.id}">Editar</button><button class="btn sm" data-act="copyAccess" data-id="${p.id}">Acceso</button></td></tr>`).join('');
     return `<div class="card"><div class="row between"><h2>Jugadores (${n})</h2><div class="row"><button class="btn go" data-act="addPlayer">+ Añadir</button><button class="btn" data-act="copyAllPins">Copiar PINs</button></div></div>
       <p class="muted small">▲▼ mueven al jugador en el ranking. “Acceso” copia un mensaje con su PIN y su enlace personal para su WhatsApp.</p>
       <div style="overflow:auto"><table class="atable"><thead><tr><th>#</th><th>Jugador</th><th>PIN</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
@@ -597,7 +623,7 @@
         <div class="vsrow">${f(c.challenger_id, c.pos_challenger, 'l')}<div class="vsb">VS</div>${f(c.challenged_id, c.pos_challenged, 'r')}</div>
         <div class="body">${c.score ? `<div class="score">${esc(c.score)}</div>` : ''}
           <div class="chips"><span class="chip ${c.msg_group ? 'ok' : 'ko'}">${c.msg_group ? '✓' : '✗'} Grupo</span><span class="chip ${c.msg_private ? 'ok' : 'ko'}">${c.msg_private ? '✓' : '✗'} Privado</span></div>
-          <div class="row" style="margin-top:10px"><button class="btn sm go" data-act="aEdit" data-id="${c.id}">✏️ Editar todo</button><button class="btn sm" data-act="aResult" data-id="${c.id}">Resultado</button><button class="btn sm" data-act="aCant" data-id="${c.id}">No puede</button>
+          <div class="row" style="margin-top:10px"><button class="btn sm go" data-act="aEdit" data-id="${c.id}">Editar todo</button><button class="btn sm" data-act="aResult" data-id="${c.id}">Resultado</button><button class="btn sm" data-act="aCant" data-id="${c.id}">No puede</button>
           <button class="btn sm" data-act="aSet" data-id="${c.id}" data-st="sinResultado">Sin resultado</button><button class="btn sm" data-act="aSet" data-id="${c.id}" data-st="pendiente">Reabrir</button>
           <button class="btn sm danger" data-act="aSet" data-id="${c.id}" data-st="anulado" title="No envió el privado">Anular + penalizar</button><button class="btn sm danger" data-act="aDel" data-id="${c.id}">Borrar</button></div></div></div>`;
     }).join('');
@@ -622,6 +648,8 @@
         <div class="row"><div style="flex:1;min-width:130px"><label for="wHour">Hora de actualización diaria (0-23)</label><input id="wHour" type="number" min="0" max="23" value="${c.refreshHour == null ? 7 : c.refreshHour}"></div></div>
         <p class="small muted">Las esperas terminan siempre a la hora de actualización diaria (por defecto las 07:00) y ese día se avisa a quien cambia de fase. Ejemplo con 2 / 5 / 5: tras el reto, ambos 2 días sin retar ni ser retados; después, el ganador 5 días sin ser retado (puede retar) y el perdedor 5 días sin retar (puede ser retado).</p>
         <div class="actions"><button class="btn go" data-act="saveLive">Guardar esperas y plazos</button></div></div>
+      <div class="card"><h2>Copia de seguridad</h2><p class="muted small">Descarga todos los datos del torneo (jugadores, PIN, teléfonos, retos y movimientos). Guárdala en un sitio privado: contiene datos personales.</p>
+        <div class="actions" style="justify-content:flex-start"><button class="btn go" data-act="backup">Descargar copia (.json)</button></div></div>
       <div class="card"><h2>Cuadros finales</h2><p class="muted small">Fija la clasificación al terminar la fase de retos. Después marca los ganadores en la pestaña Cuadros.</p>
         <div class="row"><button class="btn go" data-act="freeze" data-on="1">Fijar clasificación final</button><button class="btn danger" data-act="freeze" data-on="0">Liberar</button></div></div>
       <div class="card"><h2>Clave del juez</h2><label for="curPwd">Clave con la que has entrado</label><div class="pwrow"><input id="curPwd" type="password" readonly value="${esc(adminPwd)}"><button class="btn" type="button" data-act="togglePwd" data-target="curPwd" aria-controls="curPwd">Ver</button></div>
@@ -642,7 +670,7 @@
   function closePreview() {
     const st = toLogicState(), pv = L.previewClose(st), pending = curPeriod().challenges.filter((c) => c.status === 'pendiente').length;
     const rows = pv.after.map((id, i) => { const d = pv.before.indexOf(id) - i; return `<tr><td><b>${i + 1}</b></td><td>${esc(aNm(id))}</td><td>${d > 0 ? `<span class="delta u">▲ ${d}</span>` : d < 0 ? `<span class="delta d">▼ ${-d}</span>` : '<span class="muted">=</span>'}</td></tr>`; }).join('');
-    sheet(`<h2>Cerrar periodo ${curPeriod().n}</h2>${pending ? `<div class="note">⚠️ ${pending} reto(s) sin resultado: ambos jugadores bajarán 3 puestos.</div>` : ''}
+    sheet(`<h2>Cerrar periodo ${curPeriod().n}</h2>${pending ? `<div class="note">Atención: ${pending} reto(s) sin resultado: ambos jugadores bajarán 3 puestos.</div>` : ''}
       <h3>Movimientos</h3><ul class="log small">${pv.log.map((l) => `<li>${esc(l)}</li>`).join('') || '<li class="muted">Ninguno</li>'}</ul>
       <h3>Nuevo ranking</h3><div style="max-height:240px;overflow:auto"><table><tbody>${rows}</tbody></table></div>
       <h3>Fechas del periodo ${curPeriod().n + 1}</h3><p class="muted small">Sugerido: empieza el lunes siguiente. Puedes cambiarlo.</p>
@@ -700,9 +728,9 @@
       installSheet();
     },
     async avisos() {
-      const seen = seenId(); sheet('<h2>🔔 Avisos</h2><div class="skel"></div><div class="skel"></div>');
+      const seen = seenId(); sheet('<h2>Avisos</h2><div class="skel"></div><div class="skel"></div>');
       const r = await rpc('tenis_my_notifications', creds()).catch(() => null);
-      if (!r || r.error) return sheet(`<h2>🔔 Avisos</h2><div class="note bad">No se pudieron cargar los avisos.</div><div class="actions">${cancel}</div>`);
+      if (!r || r.error) return sheet(`<h2>Avisos</h2><div class="note bad">No se pudieron cargar los avisos.</div><div class="actions">${cancel}</div>`);
       ui.notifItems = r.items; ui.notifFetched = S.me && S.me.notifLast;
       sheet(renderAvisos(r.items, seen));
       const last = r.items.length ? r.items[0].id : 0; store.set(seenKey(), Math.max(seen, last)); render();
@@ -717,7 +745,7 @@
         const r = await rpc('tenis_push_subscribe', { ...creds(), p_sub: sub.toJSON() });
         if (r.error) return toast(esc(r.error), 'err');
       } catch (e) { return toast('No se pudieron activar los avisos en este dispositivo', 'err'); }
-      await refreshPush(); profileSheet(); toast('🔔 Avisos activados'); burst({ n: 50 });
+      await refreshPush(); profileSheet(); toast('Avisos activados'); burst({ n: 50 });
     },
     async disablePush() {
       try { const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); if (sub) { await rpc('tenis_push_unsubscribe', { ...creds(), p_endpoint: sub.endpoint }); await sub.unsubscribe(); } } catch (e) { /* */ }
@@ -730,7 +758,7 @@
       if (a !== b) return toast('Los dos PIN no coinciden', 'err');
       const r = await rpc('tenis_set_pin', { ...creds(), p_new: a }).catch(() => ({ error: 'Sin conexión' }));
       if (r.error) return toast(esc(r.error), 'err');
-      me = { id: me.id, pin: a }; saveSession(me); closeSheet(); toast('✅ PIN cambiado. Úsalo la próxima vez que entres.');
+      me = { id: me.id, pin: a }; saveSession(me); closeSheet(); toast('PIN cambiado. Úsalo la próxima vez que entres.');
     },
     dismissPush() { store.set('hegemon.pushHint', 1); render(); },
     async savePhone() {
@@ -814,17 +842,23 @@
     },
     copyAccess(el) {
       const p = A.players.find((x) => x.id === el.dataset.id);
-      copy(`Hola ${firstName(p.name)} 🎾 Ya puedes retar desde la web del Trofeo Hegemón.\nTu enlace: ${link(p.id)}\nTu PIN: ${p.pin}\n(Es personal, no lo compartas)`, 'Mensaje copiado: pégalo en su WhatsApp');
+      copy(`Hola ${firstName(p.name)}, ya puedes retar desde la web del Trofeo Hegemón.\nTu enlace: ${link(p.id)}\nTu PIN: ${p.pin}\n(Es personal, no lo compartas)`, 'Mensaje copiado: pégalo en su WhatsApp');
     },
     copyAllPins() { copy(A.players.map((p) => `${p.pos};${p.name};${p.pin};${link(p.id)}`).join('\n'), 'PINs y enlaces copiados'); },
     mvPlayer(el) {
       const i = Number(el.dataset.i), j = i + Number(el.dataset.d), ids = A.players.map((p) => p.id);
       if (j < 0 || j >= ids.length) return; [ids[i], ids[j]] = [ids[j], ids[i]]; adm('order', { ids });
     },
+    backup() {
+      const data = { generado: new Date().toISOString(), torneo: A.config, jugadores: A.players, periodos: A.periods, cuadros: { clasificacionFinal: A.finalRanking, ganadores: A.bracket }, movimientos: (S && S.movements) || [] };
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+      a.download = `hegemon-copia-${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      toast('Copia descargada. Guárdala en un sitio privado.');
+    },
     setMode(el) {
       const mode = el.dataset.v; if (mode === A.config.mode) return;
       if (mode === 'vivo' && !confirm('Se activa el ranking vivo: los resultados moverán el ranking al instante y los retos se abrirán a todos. ¿Seguro?')) return;
-      adm('config', { mode }, mode === 'vivo' ? '⚡ Ranking vivo activado' : 'Modo por periodos activado');
+      adm('config', { mode }, mode === 'vivo' ? 'Ranking vivo activado' : 'Modo por periodos activado');
     },
     saveLive() {
       adm('config', { waitBoth: Number($('#wBoth').value), winnerDays: Number($('#wWin').value), loserDays: Number($('#wLose').value), challengeDays: Number($('#wDays').value), refreshHour: Number($('#wHour').value) }, 'Esperas y plazos guardados');
@@ -943,7 +977,7 @@
   introBall();
   render();
   refresh(true).then(() => { refreshPush().then(syncPush); if (hash && !me && S) { loginSheet(hash[1]); } if (location.hash === '#admin') actions.adminEntry(); });
-  setInterval(() => { if (!document.hidden) refresh(); }, CFG.pollMs);
+  setInterval(() => { if (!document.hidden && Date.now() >= nextPollAt) refresh(); }, CFG.pollMs);
   setInterval(tickCountdowns, 30000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 })();
