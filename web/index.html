@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#06241b">
+  <title>Trofeo Hegemón · Retos</title>
+  <meta name="description" content="Torneo social de tenis por retos. Ranking en vivo, retos y cuadros finales.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2715%27 fill=%27%23d4f53c%27/%3E%3Cpath d=%27M5 9c6 3 6 11 0 14M27 9c-6 3-6 11 0 14%27 stroke=%27white%27 stroke-width=%272.5%27 fill=%27none%27/%3E%3C/svg%3E">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Hegemón">
+  <link rel="stylesheet" href="styles.css?v=26">
+</head>
+<body>
+  <div class="court-bg" aria-hidden="true"></div>
+  <header class="top">
+    <a class="brand" href="#" data-act="tab" data-v="home">
+      <span class="ball" aria-hidden="true"></span>
+      <span class="brand-t"><b id="title">Trofeo Hegemón</b><small id="subtitle"></small></span>
+    </a>
+    <div class="top-right"><span class="live" title="Datos en vivo"><i></i>EN VIVO</span><button class="who" id="who" data-act="who"></button></div>
+  </header>
+  <nav id="tabs" aria-label="Secciones"></nav>
+  <main id="view"></main>
+  <footer class="foot"><button class="linklike" data-act="adminEntry">Zona del juez árbitro</button></footer>
+  <div id="sheet" class="sheet" hidden></div>
+  <div id="ov" class="ov" hidden></div>
+  <div id="toasts" aria-live="polite"></div>
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <script src="config.js?v=26"></script>
+  <script src="logic.js?v=26"></script>
+  <script src="app.js?v=26"></script>
+</body>
+</html>
