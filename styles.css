@@ -305,3 +305,53 @@ nav button[aria-current="true"]:hover .ico { transform: scale(1.5) translateY(-3
 .ov .f.r { background: linear-gradient(225deg, rgba(138, 99, 214, .55), rgba(63, 42, 120, .55)); border-color: rgba(203, 176, 255, .5); }
 
 .ov .f.l { background: linear-gradient(135deg, rgba(31, 207, 146, .6), rgba(6, 85, 61, .6)); border-color: rgba(120, 240, 190, .5); }
+
+/* ganador del reto: amarillo lima, como el aro del círculo VS */
+.duel .fighter.win, .duel .fighter.r.win, .duel .fighter.l.win { background: linear-gradient(135deg, #eaff68 0%, #d4f53c 55%, #b9dc22 100%); box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .45); }
+.duel .fighter.win .n { color: #0c2316; text-shadow: none; }
+.duel .fighter.win .p { background: #0c2316; color: #d4f53c; }
+
+/* noticias */
+.news { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
+.news-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.news-tag { font: 700 12px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--clay); }
+.news-tag.res { color: var(--ball); } .news-tag.baja { color: #ff8f8f; } .news-tag.aviso { color: #cbb0ff; }
+.news time { color: var(--muted); font-size: 12px; }
+.news-h { font: 800 26px/1.05 var(--display); text-transform: uppercase; margin: 0 0 6px; }
+.news-sub { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
+.news-vs { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin: 10px 0; }
+.news-side { padding: 10px 12px; border-radius: 12px; min-width: 0; } .news-side b { display: block; font: 800 20px/1.05 var(--display); text-transform: uppercase; overflow-wrap: anywhere; }
+.news-side small { font: 700 13px var(--display); letter-spacing: .06em; opacity: .85; }
+.news-side.a { background: linear-gradient(135deg, #1fcf92, #06553d); } .news-side.b { background: linear-gradient(225deg, #8a63d6, #3f2a78); text-align: right; }
+.news-side.w { background: linear-gradient(135deg, #eaff68, #c3e62c); color: #0c2316; }
+.news-score { font: 800 22px var(--display); letter-spacing: .06em; color: var(--ball); text-align: center; }
+.news-line { font-size: 14px; color: var(--muted); margin: 3px 0; }
+.news-q { margin: 10px 0 0; padding: 10px 12px; border-left: 3px solid var(--ball); background: rgba(0, 0, 0, .25); border-radius: 0 12px 12px 0; font-size: 15px; }
+.news-q b { display: block; font: 700 13px var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--ball); margin-bottom: 2px; }
+.news-q .rm { float: right; }
+.news-cta { margin-top: 12px; }
+textarea.cmt { min-height: 110px; resize: vertical; }
+.cnt { text-align: right; font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* avisos del juez en las noticias: bien visibles */
+.news.judge { position: relative; border: 0; color: #fff; padding: 18px 18px 20px; background: linear-gradient(135deg, #ff9a4d 0%, #f0602a 50%, #b8381a 100%); box-shadow: 0 10px 34px rgba(240, 96, 42, .4); }
+.news.judge .judge-h { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.news.judge .judge-h span { font: 800 16px var(--display); letter-spacing: .2em; text-transform: uppercase; flex: 1; }
+.news.judge .judge-h time { color: rgba(255, 255, 255, .85); font-size: 12px; }
+.news.judge .judge-t { margin: 0; font: 800 clamp(24px, 6vw, 32px)/1.1 var(--display); text-shadow: 0 2px 8px rgba(0, 0, 0, .25); overflow-wrap: anywhere; }
+.news.judge .pinned { position: absolute; top: -9px; right: 14px; background: var(--ball); color: #0c2316; font: 800 11px var(--display); letter-spacing: .14em; text-transform: uppercase; padding: 3px 10px; border-radius: 99px; }
+
+/* noticias: retos pequeños; resultados y comentarios de tamaño medio y más vistosos */
+.news.mini { display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin-bottom: 8px; border-radius: 12px; }
+.news.mini .news-tag { flex: none; min-width: 58px; font-size: 11px; }
+.news.mini .mini-t { flex: 1; min-width: 0; font-size: 14px; line-height: 1.25; overflow-wrap: anywhere; } .news.mini .mini-t small { display: block; color: var(--muted); font-size: 12px; }
+.news.mini time { flex: none; font-size: 11px; }
+.news.full { padding: 12px 14px; margin-bottom: 10px; border: 1px solid rgba(212, 245, 60, .6); background: linear-gradient(180deg, rgba(212, 245, 60, .09), var(--panel) 60%); box-shadow: 0 0 0 1px rgba(212, 245, 60, .14), 0 8px 26px rgba(212, 245, 60, .1); }
+.news.full .news-meta { margin-bottom: 2px; } .news.full .news-tag { background: var(--ball); color: #0c2316; padding: 2px 9px; border-radius: 99px; font-size: 11px; }
+.news.full .news-h { font-size: 21px; margin: 4px 0 6px; }
+.news.full .news-vs { margin: 6px 0; gap: 8px; } .news.full .news-side { padding: 7px 10px; border-radius: 10px; } .news.full .news-side b { font-size: 17px; } .news.full .news-side small { font-size: 12px; }
+.news.full .news-score { font-size: 20px; text-shadow: 0 0 14px rgba(212, 245, 60, .5); }
+.news.full .news-line { font-size: 12px; margin: 4px 0 0; }
+.news.full .news-q { margin-top: 8px; padding: 7px 10px; font-size: 14px; border-left-width: 4px; }
+.news.full .news-q b { font-size: 12px; } .news.full .news-cta { margin-top: 8px; }
+.news.judge { margin-bottom: 12px; }

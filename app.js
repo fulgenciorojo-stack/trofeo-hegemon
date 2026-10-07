@@ -161,6 +161,7 @@
       case 'window': return d.day ? `🟢 <b>¡Retos abiertos!</b> ${d.day === 3 ? 'Pueden retar todos' : 'Día ' + d.day}` : '🔒 Retos cerrados';
       case 'close': return `📊 <b>Periodo ${d.period} cerrado.</b> ¡Nuevo ranking publicado!`;
       case 'notice': return `📢 ${esc(d.text)}`;
+      case 'comment': return `💬 <b>${esc(d.name)}</b> ha comentado su partido`;
       case 'ranking': return `📊 <b>Ranking actualizado:</b> ${esc(d.reason || '')}${d.changes && d.changes.length ? ' · ' + d.changes.slice(0, 3).map((x) => `${esc(x.name)} ${x.from}→${x.to}`).join(', ') : ''}`;
       default: return esc(e.kind);
     }
@@ -288,7 +289,7 @@
         ${canTry ? '<button class="btn go big" data-act="picker">⚔️ ¡Retar a alguien!</button>' : ''}
         ${!mc && !open ? '<p>Cuando el juez abra los retos podrás lanzar el tuyo desde aquí.</p>' : ''}
         ${!mc && open && (mp.blocked || mp.rp) ? '<p>Ahora mismo no estás disponible para retar.</p>' : ''}
-        ${cd}</section>${S.me && !S.me.error && pushInfo && !pushInfo.on && (pushInfo.supported ? pushInfo.permission !== 'denied' : pushInfo.needsInstall) && !store.get('hegemon.pushHint') ? `<div class="card" style="border-color:var(--ball)"><h2>🔔 Activa los avisos</h2><p class="muted">Te avisamos en el móvil cuando te reten o te apunten un resultado, aunque la web esté cerrada.${pushInfo.needsInstall ? ' En iPhone, primero añade la web a la pantalla de inicio.' : ''}</p><div class="row"><button class="btn go" data-act="who">Configurar avisos</button><button class="btn" data-act="dismissPush">Ahora no</button></div></div>` : ''}${S.me && !S.me.error && !S.me.phone ? `<div class="card" style="border-color:var(--ball)"><h2>📱 Añade tu teléfono</h2><p class="muted">Así tu rival podrá escribirte por WhatsApp para quedar. Solo lo verán el juez y quien tenga un reto contigo.</p><button class="btn go" data-act="who">Añadir mi móvil</button></div>` : ''}${mc ? myDuel(mc) : ''}`;
+        ${cd}</section>${S.me && !S.me.error && pushInfo && !pushInfo.on && (pushInfo.supported ? pushInfo.permission !== 'denied' : pushInfo.needsInstall) && !store.get('hegemon.pushHint') ? `<div class="card" style="border-color:var(--ball)"><h2>🔔 Activa los avisos</h2><p class="muted">Te avisamos en el móvil cuando te reten o te apunten un resultado, aunque la web esté cerrada.${pushInfo.needsInstall ? ' En iPhone, primero añade la web a la pantalla de inicio.' : ''}</p><div class="row"><button class="btn go" data-act="who">Configurar avisos</button><button class="btn" data-act="dismissPush">Ahora no</button></div></div>` : ''}${S.me && !S.me.error && !S.me.phone ? `<div class="card" style="border-color:var(--ball)"><h2>📱 Añade tu teléfono</h2><p class="muted">Así tu rival podrá escribirte por WhatsApp para quedar. Solo lo verán el juez y quien tenga un reto contigo.</p><button class="btn go" data-act="who">Añadir mi móvil</button></div>` : ''}${commentBanner()}${mc ? myDuel(mc) : ''}`;
     } else {
       hero = `<section class="hero"><div class="kick">Torneo social de tenis · ${esc(S.config.season)}</div>
         <h1>${esc(S.config.title)}</h1><p>Escala el ranking retando a quien tienes por encima. Entra con tu PIN para lanzar retos y apuntar resultados.</p>
@@ -393,19 +394,82 @@
     }).join('');
   }
 
-  // --- Historial
+  // --- Noticias (historial)
+  async function loadNews(more) {
+    const before = more && ui.news && ui.news.stories.length ? ui.news.stories[ui.news.stories.length - 1].newsAt : null;
+    const r = await rpc('tenis_news', { p_limit: 30, p_before: before }).catch(() => null);
+    if (!r || r.error) return;
+    ui.news = more && ui.news ? { stories: ui.news.stories.concat(r.stories), notes: ui.news.notes.concat(r.notes) } : { stories: r.stories, notes: r.notes };
+    ui.newsMore = r.stories.length >= 30; ui.newsExpanded = !!more || (ui.newsExpanded && !!more);
+    if (ui.tab === 'hist') render();
+  }
+  function newsCard(st) {
+    const A = st.an, B = st.bn, w = st.status === 'jugado' ? st.winner : st.status === 'noPuede' ? (st.noPuede === st.a ? st.b : st.a) : null;
+    let tag = 'Reto', cls = '', head, sub;
+    if (st.status === 'jugado') {
+      const wn = w === st.a ? A : B, ln = w === st.a ? B : A; tag = 'Resultado'; cls = 'res'; head = `${wn} gana a ${ln}`;
+      sub = (st.score ? `Marcador: ${st.score}. ` : 'Resultado apuntado. ') + (w === st.a ? 'El retador se lleva el reto.' : 'El retado se defiende.');
+    } else if (st.status === 'noPuede') {
+      const x = st.noPuede === st.a ? A : B, y = st.noPuede === st.a ? B : A; tag = 'Baja'; cls = 'baja'; head = `${x} no puede jugar contra ${y}`; sub = st.grave === false ? 'Baja por una causa no grave.' : 'Baja por una causa grave.';
+    } else if (st.status === 'sinResultado') {
+      tag = 'Sin jugar'; cls = 'baja'; head = `Reto sin resultado: ${A} y ${B}`; sub = 'Se acabó el plazo sin que se apuntara el resultado.';
+    } else {
+      head = `${A} reta a ${B}`; sub = `#${st.pa} contra #${st.pb}${st.type === 'inverso' ? ' · reto inverso' : st.dist > 5 ? ` · a ${st.dist} puestos` : ''}. Pendiente de jugar.`;
+    }
+    const mine = me && (st.a === me.id || st.b === me.id), myCm = mine ? (st.a === me.id ? st.commentA : st.commentB) : null;
+    // retos pendientes, bajas y plazos agotados: línea pequeña
+    if (st.status !== 'jugado') {
+      const t = st.status === 'pendiente' ? `<b>${esc(A)}</b> reta a <b>${esc(B)}</b><small>#${st.pa} → #${st.pb}${st.type === 'inverso' ? ' · inverso' : st.dist > 5 ? ` · a ${st.dist} puestos` : ''}</small>` : esc(head);
+      return `<article class="news mini"><span class="news-tag ${cls}">${tag}</span><div class="mini-t">${t}</div><time>${ago(st.newsAt)}</time></article>`;
+    }
+    const quote = (cm, who, side) => cm ? `<blockquote class="news-q"><b>${esc(who)} · ${ago(cm.at)}</b>${esc(cm.text)}${adminPwd ? ` <button class="btn sm danger rm" data-act="clearComment" data-id="${st.id}" data-side="${side}">Quitar</button>` : ''}</blockquote>` : '';
+    return `<article class="news full"><div class="news-meta"><span class="news-tag res">Resultado</span><time>${ago(st.newsAt)}</time></div>
+      <h3 class="news-h">${esc(head)}</h3>
+      <div class="news-vs"><div class="news-side a ${w === st.a ? 'w' : ''}"><small>#${st.pa}</small><b>${esc(A)}</b></div><div class="news-score">${st.score ? esc(st.score) : 'VS'}</div><div class="news-side b ${w === st.b ? 'w' : ''}"><small>#${st.pb}</small><b>${esc(B)}</b></div></div>
+      <div class="news-line">${esc(w === st.a ? 'El retador se lleva el reto' : 'El retado se defiende')} · reto lanzado ${esc(fmtTs(st.createdAt))}${st.resultAt ? ` · resultado ${esc(fmtTs(st.resultAt))}` : ''}</div>
+      ${quote(st.commentA, A, 'a')}${quote(st.commentB, B, 'b')}
+      ${mine ? `<div class="news-cta"><button class="btn sm ${myCm ? '' : 'go'}" data-act="commentSheet" data-id="${st.id}">${myCm ? 'Editar mi comentario' : 'Cuenta cómo fue el partido'}</button></div>` : ''}</article>`;
+  }
+  const megaSvg = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v3a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1Z"/><path d="M15 9a4 4 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/></svg>';
+  function noteCard(n, pinned) {
+    const d = n.data || {};
+    if (n.kind === 'notice') {
+      return `<article class="news judge">${pinned ? '<span class="pinned">Fijado</span>' : ''}<div class="judge-h">${megaSvg}<span>Aviso del juez</span><time>${ago(n.at)}</time></div><p class="judge-t">${esc(d.text)}</p></article>`;
+    }
+    return `<article class="news"><div class="news-meta"><span class="news-tag aviso">Ranking</span><time>${ago(n.at)}</time></div><p style="margin:0;font-size:16px">Periodo ${esc(d.period)} cerrado: nuevo ranking publicado.</p></article>`;
+  }
   function vHist() {
+    const head = '<div class="row between" style="padding:0 4px 10px"><h2 style="font-size:30px">Noticias del torneo</h2></div>';
+    let feed;
+    if (!ui.news) feed = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+    else {
+      const week = now() - 7 * 864e5, pinnedNotes = ui.news.notes.filter((x) => x.kind === 'notice' && new Date(x.at).getTime() > week);
+      const items = ui.news.stories.map((x) => ({ t: new Date(x.newsAt).getTime(), h: newsCard(x) })).concat(ui.news.notes.filter((x) => !pinnedNotes.includes(x)).map((x) => ({ t: new Date(x.at).getTime(), h: noteCard(x) }))).sort((p, q) => q.t - p.t);
+      const top = pinnedNotes.sort((p, q) => new Date(q.at) - new Date(p.at)).map((x) => noteCard(x, true));
+      feed = items.length || top.length ? top.join('') + items.map((x) => x.h).join('') + (ui.newsMore ? '<div style="text-align:center"><button class="btn" data-act="moreNews">Ver noticias anteriores</button></div>' : '') : '<div class="card empty"><h2>Todavía no hay noticias</h2><p>Cada reto se contará aquí: quién reta, quién juega y cómo acaba.</p></div>';
+    }
+    return head + feed + `<details class="legend card" style="margin-top:14px"><summary>Archivo de movimientos del ranking</summary>${vArchive()}</details>`;
+  }
+  function vArchive() {
     if (isLive()) {
       const mv = S.movements || [];
-      if (!mv.length) return '<div class="card empty"><h2>Movimientos del ranking</h2><p>Cada vez que se apunte un resultado verás aquí quién sube y quién baja.</p></div>';
-      return `<div class="card"><h2>Movimientos del ranking</h2><p class="muted small">Se actualizan en cuanto se apunta cada resultado.</p>
-        <div class="notifs big">${mv.map((m) => { const d = m.from - m.to; return `<div class="notif"><b>${esc(m.name)} <span class="delta ${d > 0 ? 'u' : 'd'}">${d > 0 ? '▲ ' + d : '▼ ' + (-d)}</span> <span class="muted small">#${m.from} → #${m.to}</span></b><span>${esc(m.reason)}</span><time>${ago(m.at)}</time></div>`; }).join('')}</div></div>`;
+      if (!mv.length) return '<p class="muted small">Cada vez que se apunte un resultado verás aquí quién sube y quién baja.</p>';
+      return `<div class="notifs big" style="margin-top:8px">${mv.map((m) => { const d = m.from - m.to; return `<div class="notif"><b>${esc(m.name)} <span class="delta ${d > 0 ? 'u' : 'd'}">${d > 0 ? '▲ ' + d : '▼ ' + (-d)}</span> <span class="muted small">#${m.from} → #${m.to}</span></b><span>${esc(m.reason)}</span><time>${ago(m.at)}</time></div>`; }).join('')}</div>`;
     }
-    if (!S.history.length) return '<div class="card empty"><h2>Historial</h2><p>Aquí aparecerán los periodos cerrados con todos los movimientos del ranking.</p></div>';
-    return S.history.map((h) => `<div class="card"><h2>Periodo ${h.n} <span class="muted small">${fmtDate(h.start)} – ${fmtDate(h.end)}</span></h2>
-      <ul class="log">${h.log.map((l) => `<li>${esc(l)}</li>`).join('') || '<li class="muted">Sin movimientos</li>'}</ul></div>`).join('');
+    if (!S.history.length) return '<p class="muted small">Aquí aparecerán los periodos cerrados con todos los movimientos del ranking.</p>';
+    return S.history.map((h) => `<h3 style="margin-top:12px">Periodo ${h.n} <span class="muted small">${fmtDate(h.start)} – ${fmtDate(h.end)}</span></h3><ul class="log">${h.log.map((l) => `<li>${esc(l)}</li>`).join('') || '<li class="muted">Sin movimientos</li>'}</ul>`).join('');
   }
-
+  const cmtSkipped = () => store.get('hegemon.cmtSkip') || [];
+  function commentBanner() {
+    if (!me || !S.me || S.me.error) return '';
+    const id = (S.me.pendingComments || []).find((x) => !cmtSkipped().includes(x)); if (!id) return '';
+    return `<div class="card" style="border-color:var(--ball)"><h2>Cuenta cómo fue tu partido</h2><p class="muted">Tienes un partido jugado sin comentario. Cuenta algo del partido: saldrá en las noticias del torneo, con tu nombre.</p><div class="row"><button class="btn go" data-act="commentSheet" data-id="${id}">Escribir comentario</button><button class="btn" data-act="skipComment" data-id="${id}">Ahora no</button></div></div>`;
+  }
+  function commentSheet(id, prefill) {
+    sheet(`<h2>¿Cómo fue el partido?</h2><p class="muted small">Cuéntanos algo: cómo se jugó, el ambiente, un punto que recuerdes. Saldrá en las noticias del torneo con tu nombre.</p>
+      <label for="cmtText">Tu comentario</label><textarea id="cmtText" class="cmt" maxlength="400" placeholder="Un partidazo, muy igualado en el segundo set…">${esc(prefill || '')}</textarea><div class="cnt"><span id="cmtN">${(prefill || '').length}</span>/400</div>
+      <div class="actions"><button class="btn" data-act="skipComment" data-id="${id}">Ahora no</button><button class="btn go" data-act="saveComment" data-id="${id}">Publicar</button></div>`);
+  }
 
   // ---------- avisos push, instalación y PIN ----------
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1 && !/android/i.test(navigator.userAgent));
@@ -551,7 +615,7 @@
     if (r.error) return toast(esc(r.error), 'err');
     closeSheet(); await refresh(true);
     const c = S.challenges.find((x) => x.id === el.dataset.id), loser = w === c.a ? c.b : c.a;
-    resultOverlay(w === me.id, nm(w), nm(loser), score);
+    ui.askComment = el.dataset.id; resultOverlay(w === me.id, nm(w), nm(loser), score);
   }
   function cantSheet(id) {
     sheet(`<h2>¿No puedes jugar?</h2><div class="note bad">Perderás el reto y bajarás 3 puestos (5 si ya te ocurrió por una causa no grave). Si es algo importante, avisa también al juez.</div>
@@ -718,9 +782,23 @@
   }
 
   const actions = {
-    tab(el) { ui.tab = el.dataset.v; closeOverlay(); render(); scrollTo(0, 0); },
+    tab(el) { ui.tab = el.dataset.v; closeOverlay(); render(); scrollTo(0, 0); if (ui.tab === 'hist') loadNews(); },
     admTab(el) { ui.admTab = el.dataset.v; render(); },
-    closeSheet, closeOv: closeOverlay,
+    closeSheet,
+    closeOv() { closeOverlay(); if (ui.askComment) { const id = ui.askComment; ui.askComment = null; commentSheet(id); } },
+    commentSheet(el) {
+      const st = ui.news && ui.news.stories.find((x) => x.id === el.dataset.id), cm = st && (st.a === me.id ? st.commentA : st.commentB);
+      commentSheet(el.dataset.id, cm ? cm.text : '');
+    },
+    skipComment(el) { const l = cmtSkipped(); if (el.dataset.id && !l.includes(el.dataset.id)) store.set('hegemon.cmtSkip', l.concat(el.dataset.id).slice(-50)); closeSheet(); render(); },
+    async saveComment(el) {
+      const txt = ($('#cmtText').value || '').trim();
+      const r = await rpc('tenis_comment', { ...creds(), p_challenge: el.dataset.id, p_text: txt }).catch(() => ({ error: 'Sin conexión' }));
+      if (r.error) return toast(esc(r.error), 'err');
+      closeSheet(); toast(txt ? 'Comentario publicado en las noticias' : 'Comentario retirado'); burst({ n: 40 }); await refresh(true); loadNews();
+    },
+    moreNews() { loadNews(true); },
+    async clearComment(el) { if (confirm('¿Quitar este comentario de las noticias?')) { await adm('comment_clear', { id: el.dataset.id, side: el.dataset.side }, 'Comentario quitado'); loadNews(); } },
     retry() { refresh(true); },
     async who() {
       if (window.TENIS_DEMO) return toast('Vista previa de solo lectura: la entrada con PIN está desactivada.');
@@ -924,6 +1002,7 @@
     if (fn) { if (el.tagName !== 'A') e.preventDefault(); fn(el); }
   });
   document.addEventListener('input', (e) => {
+    if (e.target.id === 'cmtText') { const n = document.getElementById('cmtN'); if (n) n.textContent = e.target.value.length; return; }
     if (e.target.dataset && e.target.dataset.input === 'filter') {
       ui.filter = e.target.value; const pos = e.target.selectionStart; render(); const f = $('#filter'); if (f) { f.focus(); f.setSelectionRange(pos, pos); }
     }
@@ -987,5 +1066,6 @@
   refresh(true).then(() => { refreshPush().then(syncPush); if (hash && !me && S) { loginSheet(hash[1]); } if (location.hash === '#admin') actions.adminEntry(); });
   setInterval(() => { if (!document.hidden && Date.now() >= nextPollAt) refresh(); }, CFG.pollMs);
   setInterval(tickCountdowns, 30000);
+  setInterval(() => { if (ui.tab === 'hist' && !document.hidden && !ui.newsMore && Date.now() >= nextPollAt) loadNews(); }, 15000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 })();
