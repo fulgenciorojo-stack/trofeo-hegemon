@@ -403,6 +403,7 @@
     ui.newsMore = r.stories.length >= 30; ui.newsExpanded = !!more || (ui.newsExpanded && !!more);
     if (ui.tab === 'hist') render();
   }
+  const trophySvg = '<svg class="tr" viewBox="0 0 32 32" width="32" height="32" aria-label="Ganador"><path d="M9 4h14v7.2a7 7 0 0 1-14 0V4Z" fill="#0c2316"/><path d="M9 7H4.6v2.1a5.6 5.6 0 0 0 5.1 5.6M23 7h4.4v2.1a5.6 5.6 0 0 1-5.1 5.6" fill="none" stroke="#0c2316" stroke-width="2.3" stroke-linecap="round"/><path d="M16 18.2v4.4" stroke="#0c2316" stroke-width="2.6" stroke-linecap="round"/><path d="M11.6 22.4h8.8l1.2 2.2H10.4l1.2-2.2Z" fill="#0c2316"/><rect x="9.2" y="24.6" width="13.6" height="3.4" rx="1.3" fill="#0c2316"/><path d="M16 6.2l1.45 3 3.3.45-2.4 2.3.6 3.25L16 13.6l-2.95 1.6.6-3.25-2.4-2.3 3.3-.45L16 6.2Z" fill="#eaff68"/></svg>';
   function newsCard(st) {
     const A = st.an, B = st.bn, w = st.status === 'jugado' ? st.winner : st.status === 'noPuede' ? (st.noPuede === st.a ? st.b : st.a) : null;
     let tag = 'Reto', cls = '', head, sub;
@@ -425,7 +426,7 @@
     const quote = (cm, who, side) => cm ? `<blockquote class="news-q"><b>${esc(who)} · ${ago(cm.at)}</b>${esc(cm.text)}${adminPwd ? ` <button class="btn sm danger rm" data-act="clearComment" data-id="${st.id}" data-side="${side}">Quitar</button>` : ''}</blockquote>` : '';
     return `<article class="news full"><div class="news-meta"><span class="news-tag res">Resultado</span><time>${ago(st.newsAt)}</time></div>
       <h3 class="news-h">${esc(head)}</h3>
-      <div class="news-vs"><div class="news-side a ${w === st.a ? 'w' : ''}"><small>#${st.pa}</small><b>${esc(A)}</b></div><div class="news-score">${st.score ? esc(st.score) : 'VS'}</div><div class="news-side b ${w === st.b ? 'w' : ''}"><small>#${st.pb}</small><b>${esc(B)}</b></div></div>
+      <div class="news-vs"><div class="news-side a ${w === st.a ? 'w' : ''}"><small>#${st.pa}</small><b>${w === st.a ? trophySvg : ''}${esc(A)}</b></div><div class="news-score">${st.score ? esc(st.score) : 'VS'}</div><div class="news-side b ${w === st.b ? 'w' : ''}"><small>#${st.pb}</small><b>${w === st.b ? trophySvg : ''}${esc(B)}</b></div></div>
       <div class="news-line">${esc(w === st.a ? 'El retador se lleva el reto' : 'El retado se defiende')} · reto lanzado ${esc(fmtTs(st.createdAt))}${st.resultAt ? ` · resultado ${esc(fmtTs(st.resultAt))}` : ''}</div>
       ${quote(st.commentA, A, 'a')}${quote(st.commentB, B, 'b')}
       ${mine ? `<div class="news-cta"><button class="btn sm ${myCm ? '' : 'go'}" data-act="commentSheet" data-id="${st.id}">${myCm ? 'Editar mi comentario' : 'Cuenta cómo fue el partido'}</button></div>` : ''}</article>`;
