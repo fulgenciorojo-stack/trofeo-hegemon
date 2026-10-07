@@ -230,7 +230,7 @@
         <button class="btn go big" data-act="who">Entrar con mi PIN</button>${cd}
         <div class="stats"><div class="stat"><b>${S.players.length}</b><span>jugadores</span></div><div class="stat"><b>${active.length}</b><span>retos en juego</span></div><div class="stat"><b>${pending}</b><span>por jugar</span></div></div></section>`;
     }
-    return hero + avisosButton() + feedCard();
+    return hero + avisosButton() + installButton() + feedCard();
   }
 
   function feedCard() {
@@ -330,11 +330,13 @@
 
 
   // ---------- avisos push, instalación y PIN ----------
-  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1 && !/android/i.test(navigator.userAgent));
   const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
   const pushCapable = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   let deferredInstall = null, pushInfo = null;
-  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; });
+  const isAndroid = /android/i.test(navigator.userAgent);
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; if (S) render(); });
+  window.addEventListener('appinstalled', () => { store.set('hegemon.installed', 1); deferredInstall = null; if (S) render(); toast('✅ Web instalada en tu pantalla de inicio'); });
   const b64ToU8 = (b) => { const p = '='.repeat((4 - (b.length % 4)) % 4), r = atob((b + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map((c) => c.charCodeAt(0))); };
 
   async function pushStatus() {
@@ -368,6 +370,23 @@
         <div style="flex:1;min-width:120px"><label for="newPin2">Repítelo</label><input id="newPin2" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></div></div>
       <div class="actions" style="margin-top:8px"><button class="btn" data-act="savePin">Cambiar PIN</button></div>
       <div class="actions" style="margin-top:18px;border-top:1px solid var(--line);padding-top:12px"><button class="btn danger" data-act="logout" style="margin-right:auto">Cerrar sesión</button>${cancel}</div>`);
+  }
+
+
+  // ---------- instalar como app (pantalla de inicio) ----------
+  const shareSvg = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-4px"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M6 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg>';
+  const phoneSvg = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6.5" y="2" width="11" height="20" rx="2.5"/><path d="M12 9v6M9 12h6"/></svg>';
+  function installButton() {
+    if (window.TENIS_DEMO || standalone || store.get('hegemon.installed')) return '';
+    if (!(isIOS || isAndroid || deferredInstall)) return '';
+    return `<button class="avisos-btn install-btn" data-act="install">${phoneSvg}<span>Instalar como app<small style="display:block">Añádela a tu pantalla de inicio</small></span><em class="bubble">＋</em></button>`;
+  }
+  function installSheet() {
+    let pasos;
+    if (isIOS) pasos = `<ol class="steps-list"><li>Abre esta página en <b>Safari</b> (en otros navegadores del iPhone puede no aparecer).</li><li>Pulsa <b>Compartir</b> ${shareSvg} (el cuadrado con la flecha, abajo en el centro).</li><li>Desliza hacia arriba y elige <b>Añadir a pantalla de inicio</b>.</li><li>Pulsa <b>Añadir</b>. Ya tienes el icono de la bola de tenis.</li></ol><div class="note small">Ábrela siempre desde ese icono: así los avisos llegan al móvil aunque la web esté cerrada.</div>`;
+    else if (isAndroid) pasos = `<ol class="steps-list"><li>Abre esta página en <b>Chrome</b>.</li><li>Pulsa el menú <b>⋮</b> (los tres puntos, arriba a la derecha).</li><li>Elige <b>Instalar aplicación</b> o <b>Añadir a la pantalla de inicio</b>.</li><li>Confirma con <b>Instalar</b>. Aparecerá el icono de la bola de tenis.</li></ol><div class="note small">Ábrela desde ese icono: así los avisos llegan al móvil aunque la web esté cerrada.</div>`;
+    else pasos = `<ol class="steps-list"><li>En Chrome o Edge, busca el icono de <b>instalar</b> al final de la barra de direcciones.</li><li>O abre el menú <b>⋮</b> → <b>Instalar Trofeo Hegemón</b>.</li></ol>`;
+    sheet(`<h2>📲 Instalar como app</h2><p class="muted small">Se queda en tu pantalla de inicio como una app más, sin tiendas ni descargas.</p>${pasos}<div class="actions"><button class="btn go" data-act="closeSheet">Entendido</button></div>`);
   }
 
   // ---------- bandeja de avisos ----------
@@ -604,6 +623,14 @@
       if (window.TENIS_DEMO) return toast('Vista previa de solo lectura: la entrada con PIN está desactivada.');
       if (!me) return loginSheet();
       await refreshPush(); profileSheet();
+    },
+    async install() {
+      if (deferredInstall) {
+        deferredInstall.prompt();
+        try { const r = await deferredInstall.userChoice; if (r && r.outcome === 'accepted') store.set('hegemon.installed', 1); } catch (e) { /* */ }
+        deferredInstall = null; render(); return;
+      }
+      installSheet();
     },
     async avisos() {
       const seen = seenId(); sheet('<h2>🔔 Avisos</h2><div class="skel"></div><div class="skel"></div>');
