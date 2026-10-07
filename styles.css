@@ -279,3 +279,14 @@ nav button[aria-current="true"]:hover .ico { transform: scale(1.5) translateY(-3
 .notifs { max-height: 230px; overflow: auto; display: grid; gap: 8px; }
 .notif { background: #03130e; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 2px; }
 .notif b { color: #fff; } .notif span { color: var(--muted); font-size: 13px; } .notif time { color: var(--ball); font-size: 12px; font-weight: 600; }
+
+/* botón de avisos en Inicio */
+.avisos-btn { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; margin: 0 0 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); color: #fff; font: 700 17px var(--sans); text-align: left; transition: transform .15s, border-color .2s; }
+.avisos-btn:hover { transform: translateY(-2px); border-color: var(--ball); } .avisos-btn:active { transform: scale(.98); }
+.avisos-btn svg { color: var(--ball); flex: none; } .avisos-btn span { flex: 1; } .avisos-btn small { color: var(--muted); font-weight: 500; font-size: 13px; }
+.avisos-btn.has-new { border-color: var(--ball); background: linear-gradient(90deg, #1b3d12, var(--panel)); box-shadow: 0 0 0 1px var(--ball), 0 8px 30px rgba(212, 245, 60, .18); }
+.avisos-btn.has-new svg { animation: bellRing 1.6s ease-in-out infinite; transform-origin: 50% 0; }
+@keyframes bellRing { 0%, 55%, 100% { transform: rotate(0); } 10% { transform: rotate(14deg); } 20% { transform: rotate(-12deg); } 30% { transform: rotate(9deg); } 40% { transform: rotate(-6deg); } }
+.bubble { font-style: normal; background: var(--ball); color: var(--ink); min-width: 26px; height: 26px; padding: 0 8px; border-radius: 99px; display: grid; place-items: center; font: 800 14px var(--sans); }
+.notifs.big { max-height: 60vh; }
+.notif.new { border-color: var(--ball); box-shadow: inset 3px 0 0 var(--ball); }

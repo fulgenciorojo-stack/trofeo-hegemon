@@ -153,6 +153,7 @@
       const changed = sig !== lastSig; lastSig = sig;
       const old = S; S = data;
       handleEvents(data.events); firstLoad = false;
+      if (me && data.me && !data.me.error && data.me.notifLast && data.me.notifLast !== ui.notifFetched && !ui.notifBusy) { ui.notifBusy = true; ui.notifFetched = data.me.notifLast; setTimeout(() => { fetchNotifs().finally(() => { ui.notifBusy = false; }); }, 0); }
       if (changed || force) render(old);
     } catch (e) {
       if (!S) $('#view').innerHTML = `<div class="card empty"><h2>Sin conexión</h2><p>No se pudo cargar el torneo. Revisa tu internet.</p><button class="btn go" data-act="retry">Reintentar</button></div>`;
@@ -229,7 +230,7 @@
         <button class="btn go big" data-act="who">Entrar con mi PIN</button>${cd}
         <div class="stats"><div class="stat"><b>${S.players.length}</b><span>jugadores</span></div><div class="stat"><b>${active.length}</b><span>retos en juego</span></div><div class="stat"><b>${pending}</b><span>por jugar</span></div></div></section>`;
     }
-    return hero + feedCard();
+    return hero + avisosButton() + feedCard();
   }
 
   function feedCard() {
@@ -363,20 +364,31 @@
       <p class="muted small" style="margin:6px 0 0">Para que tu rival te escriba por WhatsApp. Solo lo ven el juez y quien tenga un reto contigo.</p>
       <div class="actions" style="margin-top:8px"><button class="btn go" data-act="savePhone">Guardar móvil</button></div>
       <h3>🔔 Avisos en este dispositivo</h3>${avisos}${instalar}
-      <h3>🕘 Historial de avisos</h3><div id="notifList" class="notifs small muted">Cargando…</div>
       <h3>🔑 Cambiar mi PIN</h3><div class="row"><div style="flex:1;min-width:120px"><label for="newPin">PIN nuevo (4 cifras)</label><input id="newPin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></div>
         <div style="flex:1;min-width:120px"><label for="newPin2">Repítelo</label><input id="newPin2" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></div></div>
       <div class="actions" style="margin-top:8px"><button class="btn" data-act="savePin">Cambiar PIN</button></div>
       <div class="actions" style="margin-top:18px;border-top:1px solid var(--line);padding-top:12px"><button class="btn danger" data-act="logout" style="margin-right:auto">Cerrar sesión</button>${cancel}</div>`);
-    loadNotifs();
   }
 
-  async function loadNotifs() {
-    const box = document.getElementById('notifList'); if (!box) return;
-    const r = await rpc('tenis_my_notifications', creds()).catch(() => null), el = document.getElementById('notifList'); if (!el) return;
-    if (!r || r.error) { el.textContent = 'No se pudo cargar el historial.'; return; }
-    el.className = 'notifs';
-    el.innerHTML = r.items.length ? r.items.map((n) => `<div class="notif"><b>${esc(n.title)}</b><span>${esc(n.body)}</span><time>${ago(n.at)}</time></div>`).join('') : '<p class="small muted" style="margin:0">Todavía no has recibido avisos. Aquí aparecerán cuando te reten, te apunten un resultado o el juez publique algo.</p>';
+  // ---------- bandeja de avisos ----------
+  const seenKey = () => 'hegemon.notifSeen.' + (me && me.id);
+  const seenId = () => Number(store.get(seenKey()) || 0);
+  const unread = () => (ui.notifItems ? ui.notifItems.filter((n) => n.id > seenId()).length : (S && S.me && S.me.notifLast > seenId() ? 1 : 0));
+  async function fetchNotifs() {
+    if (!me || !S || !S.me || S.me.error) return;
+    const r = await rpc('tenis_my_notifications', creds()).catch(() => null);
+    if (!r || r.error) return;
+    ui.notifItems = r.items; ui.notifFetched = S.me.notifLast; render();
+  }
+  const bellSvg = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9Z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>';
+  function avisosButton() {
+    if (!me || !S.me || S.me.error) return '';
+    const n = unread();
+    return `<button class="avisos-btn ${n ? 'has-new' : ''}" data-act="avisos" aria-label="Avisos${n ? ', ' + n + ' sin leer' : ''}">${bellSvg}<span>Avisos</span>${n ? `<em class="bubble">${ui.notifItems ? n : '•'}</em>` : '<small>Sin novedades</small>'}</button>`;
+  }
+  function renderAvisos(items, seen) {
+    return `<h2>🔔 Avisos</h2>${items.length ? `<div class="notifs big">${items.map((n) => `<div class="notif ${n.id > seen ? 'new' : ''}"><b>${esc(n.title)}${n.id > seen ? ' <span class="badge p">NUEVO</span>' : ''}</b><span>${esc(n.body)}</span><time>${ago(n.at)}</time></div>`).join('')}</div>` : '<p class="muted">Todavía no tienes avisos. Aquí aparecerán cuando te reten, te apunten un resultado o el juez publique algo.</p>'}
+      <div class="actions"><button class="btn" data-act="who">⚙️ Avisos en el móvil</button><button class="btn go" data-act="closeSheet">Cerrar</button></div>`;
   }
 
   // ---------- hojas ----------
@@ -592,6 +604,14 @@
       if (window.TENIS_DEMO) return toast('Vista previa de solo lectura: la entrada con PIN está desactivada.');
       if (!me) return loginSheet();
       await refreshPush(); profileSheet();
+    },
+    async avisos() {
+      const seen = seenId(); sheet('<h2>🔔 Avisos</h2><div class="skel"></div><div class="skel"></div>');
+      const r = await rpc('tenis_my_notifications', creds()).catch(() => null);
+      if (!r || r.error) return sheet(`<h2>🔔 Avisos</h2><div class="note bad">No se pudieron cargar los avisos.</div><div class="actions">${cancel}</div>`);
+      ui.notifItems = r.items; ui.notifFetched = S.me && S.me.notifLast;
+      sheet(renderAvisos(r.items, seen));
+      const last = r.items.length ? r.items[0].id : 0; store.set(seenKey(), Math.max(seen, last)); render();
     },
     async enablePush() {
       if (!pushCapable) return toast('Este dispositivo no admite avisos', 'err');
