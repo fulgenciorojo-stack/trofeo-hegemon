@@ -61,6 +61,9 @@
     const d = Math.floor(ms / 864e5), h = Math.floor(ms / 36e5) % 24, m = Math.floor(ms / 6e4) % 60;
     return d > 0 ? `${d} d ${h} h` : `${h} h ${m} min`;
   }
+  const isLive = () => !!(S && S.config && S.config.mode === 'vivo');
+  const fmtTs = (iso) => new Date(iso).toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' });
+  const future = (iso) => !!iso && new Date(iso).getTime() > now();
   const myChal = () => (S && me ? S.challenges.find((c) => c.status !== 'anulado' && (c.a === me.id || c.b === me.id)) : null);
   const isMe = (id) => me && me.id === id;
   const waPhone = (p) => { if (!p) return null; let d = p.replace(/\D/g, ''); if (d.length === 9) d = '34' + d; return d; };
@@ -131,6 +134,7 @@
       case 'window': return d.day ? `🟢 <b>¡Retos abiertos!</b> ${d.day === 3 ? 'Pueden retar todos' : 'Día ' + d.day}` : '🔒 Retos cerrados';
       case 'close': return `📊 <b>Periodo ${d.period} cerrado.</b> ¡Nuevo ranking publicado!`;
       case 'notice': return `📢 ${esc(d.text)}`;
+      case 'ranking': return `📊 <b>Ranking actualizado:</b> ${esc(d.reason || '')}${d.changes && d.changes.length ? ' · ' + d.changes.slice(0, 3).map((x) => `${esc(x.name)} ${x.from}→${x.to}`).join(', ') : ''}`;
       default: return esc(e.kind);
     }
   }
@@ -193,7 +197,7 @@
     if (!S) { $('#view').innerHTML = '<div class="skel"></div>'.repeat(6); return; }
     document.title = S.config.title + ' · Retos';
     $('#title').textContent = S.config.title;
-    $('#subtitle').textContent = `Temporada ${S.config.season} · Periodo ${S.period.n}`;
+    $('#subtitle').textContent = isLive() ? `Temporada ${S.config.season} · Ranking vivo` : `Temporada ${S.config.season} · Periodo ${S.period.n}`;
     const mp = me && P()[me.id];
     $('#who').textContent = mp ? mp.name : 'Entrar';
     $('#who').classList.toggle('on', !!mp);
@@ -227,18 +231,20 @@
     const mp = me && P()[me.id], day = S.config.challengeDay, open = day > 0;
     const active = S.challenges.filter((c) => c.status !== 'anulado');
     const pending = active.filter((c) => c.status === 'pendiente').length;
-    const status = `<span class="status ${open ? 'open' : ''}"><i></i>${open ? `Retos abiertos · ${day === 3 ? 'pueden retar todos' : 'día ' + day}` : 'Retos cerrados'}</span>`;
-    const cd = `<div class="small muted" style="margin-top:8px">⏱ Fin del periodo: <b data-countdown="${S.period.deadline}">${countdown(S.period.deadline)}</b> · ${esc(fmtDeadline(S.period.deadline))}</div>`;
+    const live = isLive();
+    const status = `<span class="status ${open ? 'open' : ''}"><i></i>${live ? (open ? 'Ranking vivo · retos abiertos' : 'Retos en pausa') : open ? `Retos abiertos · ${day === 3 ? 'pueden retar todos' : 'día ' + day}` : 'Retos cerrados'}</span>`;
+    const cd = live ? `<div class="small muted" style="margin-top:8px">El ranking se actualiza en cuanto se apunta cada resultado. Plazo para jugar un reto: ${S.config.challengeDays} días.</div>` : `<div class="small muted" style="margin-top:8px">⏱ Fin del periodo: <b data-countdown="${S.period.deadline}">${countdown(S.period.deadline)}</b> · ${esc(fmtDeadline(S.period.deadline))}</div>`;
     let hero;
     if (mp) {
       const mc = myChal();
-      const canTry = open && !mc && !mp.blocked && !mp.rp;
+      const waitC = live && future(mp.cantChallengeUntil), waitB = live && future(mp.cantBeChallengedUntil);
+      const canTry = open && !mc && !mp.blocked && !mp.rp && !waitC;
       hero = `<section class="hero"><div class="kick">Hola, ${esc(firstName(mp.name))}</div>
         <div class="bigpos">#${mp.pos}<small>de ${S.players.length}</small></div>
-        <div class="row" style="margin:6px 0 10px">${status}${mp.blocked ? '<span class="pill">⛔ No retable</span>' : ''}${mp.rp ? '<span class="pill">🛡️ Ranking protegido</span>' : ''}</div>
+        <div class="row" style="margin:6px 0 10px">${status}${mp.blocked ? '<span class="pill">⛔ No retable</span>' : ''}${mp.rp ? '<span class="pill">🛡️ Ranking protegido</span>' : ''}${waitC ? `<span class="pill">⏸ Podrás retar el ${esc(fmtTs(mp.cantChallengeUntil))}</span>` : ''}${waitB ? `<span class="pill">🛡️ No te pueden retar hasta el ${esc(fmtTs(mp.cantBeChallengedUntil))}</span>` : ''}</div>
         ${canTry ? '<button class="btn go big" data-act="picker">⚔️ ¡Retar a alguien!</button>' : ''}
         ${!mc && !open ? '<p>Cuando el juez abra los retos podrás lanzar el tuyo desde aquí.</p>' : ''}
-        ${!mc && open && (mp.blocked || mp.rp) ? '<p>Ahora mismo no estás disponible para retar.</p>' : ''}
+        ${!mc && open && (mp.blocked || mp.rp) ? '<p>Ahora mismo no estás disponible para retar.</p>' : ''}${!mc && open && waitC ? '<p>Descansa un poco: cuando termine tu espera podrás lanzar otro reto.</p>' : ''}
         ${cd}</section>${S.me && !S.me.error && pushInfo && !pushInfo.on && (pushInfo.supported ? pushInfo.permission !== 'denied' : pushInfo.needsInstall) && !store.get('hegemon.pushHint') ? `<div class="card" style="border-color:var(--ball)"><h2>🔔 Activa los avisos</h2><p class="muted">Te avisamos en el móvil cuando te reten o te apunten un resultado, aunque la web esté cerrada.${pushInfo.needsInstall ? ' En iPhone, primero añade la web a la pantalla de inicio.' : ''}</p><div class="row"><button class="btn go" data-act="who">Configurar avisos</button><button class="btn" data-act="dismissPush">Ahora no</button></div></div>` : ''}${S.me && !S.me.error && !S.me.phone ? `<div class="card" style="border-color:var(--ball)"><h2>📱 Añade tu teléfono</h2><p class="muted">Así tu rival podrá escribirte por WhatsApp para quedar. Solo lo verán el juez y quien tenga un reto contigo.</p><button class="btn go" data-act="who">Añadir mi móvil</button></div>` : ''}${mc ? myDuel(mc) : ''}`;
     } else {
       hero = `<section class="hero"><div class="kick">Torneo social de tenis · ${esc(S.config.season)}</div>
@@ -280,7 +286,8 @@
     let acts = '';
     if (mine && c.status === 'pendiente') acts = `<div class="row" style="margin-top:12px"><button class="btn go big" data-act="resultSheet" data-id="${c.id}">📝 Registrar resultado</button><button class="btn danger" data-act="cantSheet" data-id="${c.id}">No puedo jugar</button></div>`;
     else if (mine && c.status === 'jugado' && c.reportedBy === me.id) acts = `<div class="row" style="margin-top:12px"><button class="btn" data-act="resultSheet" data-id="${c.id}">✏️ Corregir resultado</button></div>`;
-    const body = `${c.score ? `<div class="score">${esc(c.score)}</div>` : ''}${mine && c.status === 'pendiente' ? steps(c) : ''}${acts}`;
+    const dl = isLive() && c.status === 'pendiente' && c.deadline ? `<div class="small muted" style="margin-top:8px">⏱ Plazo para jugar: hasta el ${esc(fmtTs(c.deadline))}</div>` : '';
+    const body = `${c.score ? `<div class="score">${esc(c.score)}</div>` : ''}${dl}${mine && c.status === 'pendiente' ? steps(c) : ''}${acts}`;
     return `<div class="duel st-${c.status} ${mine ? 'mine' : ''}"><div class="tag"><span>${mine ? '⭐ Tu reto · ' : ''}${typeTxt}</span><span class="pill ${c.status}">${label}</span></div>
       <div class="vsrow">${f(c.a, c.pa, 'l')}<div class="vsb">VS</div>${f(c.b, c.pb, 'r')}</div>
       ${body ? `<div class="body">${body}</div>` : ''}</div>`;
@@ -292,7 +299,9 @@
     const inChal = {}; S.challenges.filter((c) => c.status !== 'anulado').forEach((c) => { inChal[c.a] = c.b; inChal[c.b] = c.a; });
     const pchd = new Set(S.prevChallenged);
     const badges = (p) => (S.config.challengeDay === 1 && pchd.has(p.id) ? '<span class="badge p" title="Retado el periodo anterior">P</span>' : '') + (p.down ? '<span class="badge">🔽</span>' : '') +
-      (p.blocked ? '<span class="badge">⛔ no retable</span>' : '') + (p.rp ? '<span class="badge">🛡️ RP</span>' : '');
+      (p.blocked ? '<span class="badge">⛔ no retable</span>' : '') + (p.rp ? '<span class="badge">🛡️ RP</span>' : '') +
+      (isLive() && future(p.cantBeChallengedUntil) ? `<span class="badge" title="No se le puede retar hasta ${esc(fmtTs(p.cantBeChallengedUntil))}">🛡️ hasta ${esc(new Date(p.cantBeChallengedUntil).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' }))}</span>` : '') +
+      (isLive() && future(p.cantChallengeUntil) ? `<span class="badge" title="No puede retar hasta ${esc(fmtTs(p.cantChallengeUntil))}">⏸ sin retar hasta ${esc(new Date(p.cantChallengeUntil).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' }))}</span>` : '');
     const top = S.players.slice(0, 3);
     const podium = !q && top.length === 3 ? `<div class="podium">${[1, 0, 2].map((i) => { const p = top[i]; return `<div class="pod g${i + 1} ${isMe(p.id) ? 'me' : ''}" data-flip="${p.id}"><div class="medal">${['🥇', '🥈', '🥉'][i]}</div><div class="num">${p.pos}</div><div class="n">${esc(p.name)}</div>${inChal[p.id] ? '<div class="small" style="color:var(--clay)">⚔️ en reto</div>' : ''}</div>`; }).join('')}</div>` : '';
     let rows = '', lastZone = -1;
@@ -340,6 +349,12 @@
 
   // --- Historial
   function vHist() {
+    if (isLive()) {
+      const mv = S.movements || [];
+      if (!mv.length) return '<div class="card empty"><h2>Movimientos del ranking</h2><p>Cada vez que se apunte un resultado verás aquí quién sube y quién baja.</p></div>';
+      return `<div class="card"><h2>Movimientos del ranking</h2><p class="muted small">Se actualizan en cuanto se apunta cada resultado.</p>
+        <div class="notifs big">${mv.map((m) => { const d = m.from - m.to; return `<div class="notif"><b>${esc(m.name)} <span class="delta ${d > 0 ? 'u' : 'd'}">${d > 0 ? '▲ ' + d : '▼ ' + (-d)}</span> <span class="muted small">#${m.from} → #${m.to}</span></b><span>${esc(m.reason)}</span><time>${ago(m.at)}</time></div>`; }).join('')}</div></div>`;
+    }
     if (!S.history.length) return '<div class="card empty"><h2>Historial</h2><p>Aquí aparecerán los periodos cerrados con todos los movimientos del ranking.</p></div>';
     return S.history.map((h) => `<div class="card"><h2>Periodo ${h.n} <span class="muted small">${fmtDate(h.start)} – ${fmtDate(h.end)}</span></h2>
       <ul class="log">${h.log.map((l) => `<li>${esc(l)}</li>`).join('') || '<li class="muted">Sin movimientos</li>'}</ul></div>`).join('');
@@ -523,6 +538,18 @@
     const cp = curPeriod(), day = A.config.challengeDay;
     const chs = cp.challenges.filter((c) => c.status !== 'anulado'), pend = chs.filter((c) => c.status === 'pendiente').length;
     const noMsg = chs.filter((c) => !c.msg_group || !c.msg_private);
+    if (A.config.mode === 'vivo') {
+      const open = day > 0;
+      return `<div class="card"><h2>Ranking vivo activo</h2><p class="muted small">El ranking se actualiza solo en cuanto se apunta cada resultado (por los jugadores o por ti). No hay periodos ni días 1, 2 y 3. Los retos caducan a los ${A.config.challengeDays} días y se aplican como "sin resultado".</p>
+        <div class="seg"><button class="btn" data-act="setDay" data-v="3" aria-pressed="${open}">🟢 Retos abiertos</button><button class="btn" data-act="setDay" data-v="0" aria-pressed="${!open}">⏸ En pausa</button></div>
+        <p class="small muted" style="margin-top:8px">Los días de espera tras cada reto se cambian en Ajustes → Modo del torneo.</p></div>
+      <div class="card"><h2>Retos en juego</h2><p><b>${chs.length}</b> retos · <b>${pend}</b> pendientes</p>
+        ${noMsg.length ? `<div class="note small">⚠️ Sin los dos mensajes (g): ${noMsg.map((c) => esc(aNm(c.challenger_id))).join(', ')}</div>` : ''}</div>
+      ${(() => { const inC = new Set(); chs.filter((c) => c.status === 'pendiente').forEach((c) => { inC.add(c.challenger_id); inC.add(c.challenged_id); }); const free = A.players.filter((p) => !p.blocked && !p.rp && !inC.has(p.id));
+        return `<div class="card"><h2>Sin reto ahora (${free.length})</h2><div class="chips">${free.map((p) => `<span class="chip ok">${p.pos}. ${esc(p.name)}</span>`).join('') || '<span class="muted small">Todos tienen reto</span>'}</div></div>`; })()}
+      <div class="card"><h2>Aviso a todos</h2><textarea id="notice" rows="2" maxlength="280" placeholder="Ej.: Esta semana llueve: se amplía el plazo"></textarea><div class="actions"><button class="btn go" data-act="notice">Publicar aviso</button></div></div>
+      <div class="card"><h2>Copiar para WhatsApp</h2><div class="row"><button class="btn" data-act="copyRank">Ranking</button><button class="btn" data-act="copyChals">Lista de retos</button></div></div>`;
+    }
     return `<div class="card"><h2>Ventana de retos</h2><p class="muted small">Decide quién puede retar ahora. Los jugadores lo ven al instante.</p>
         <div class="seg">${[[0, '🔒 Cerrados'], [1, 'Día 1'], [2, 'Día 2'], [3, 'Día 3 · todos']].map(([d, l]) => `<button class="btn" data-act="setDay" data-v="${d}" aria-pressed="${day === d}">${l}</button>`).join('')}</div>
         <p class="small muted" style="margin-top:8px">Día 1: solo retan quienes no retaron el periodo anterior (los retados llevan P). Día 2: también quienes retaron y ganaron. Día 3: todos.</p></div>
@@ -572,6 +599,16 @@
     return `<div class="card"><h2>Torneo</h2><label>Nombre</label><input id="cTitle" value="${esc(c.title)}"><label>Temporada</label><input id="cSeason" value="${esc(c.season)}">
       <label>Juez árbitro</label><input id="cRef" value="${esc(c.referee)}"><label>Días por periodo</label><input id="cDays" type="number" min="7" max="30" value="${c.periodDays}">
       <div class="actions"><button class="btn go" data-act="saveCfg">Guardar</button></div></div>
+      <div class="card"><h2>Modo del torneo</h2>
+        <div class="seg"><button class="btn" data-act="setMode" data-v="periodos" aria-pressed="${c.mode !== 'vivo'}">Periodos (como las bases)</button><button class="btn" data-act="setMode" data-v="vivo" aria-pressed="${c.mode === 'vivo'}">Ranking vivo</button></div>
+        <p class="small muted" style="margin-top:8px">En <b>ranking vivo</b> los puestos se mueven al apuntar cada resultado y los retos se suceden poco a poco, con esperas entre uno y otro. Para activarlo, primero cierra el periodo en curso.</p>
+        <h3>Esperas y plazos (días)</h3>
+        <div class="row"><div style="flex:1;min-width:130px"><label for="wBoth">Espera de ambos tras el reto</label><input id="wBoth" type="number" min="0" max="30" value="${c.waitBoth}"></div>
+          <div style="flex:1;min-width:130px"><label for="wWin">Ganador sin ser retado (después)</label><input id="wWin" type="number" min="0" max="60" value="${c.winnerDays}"></div></div>
+        <div class="row"><div style="flex:1;min-width:130px"><label for="wLose">Perdedor sin retar (después)</label><input id="wLose" type="number" min="0" max="60" value="${c.loserDays}"></div>
+          <div style="flex:1;min-width:130px"><label for="wDays">Plazo para jugar un reto</label><input id="wDays" type="number" min="3" max="60" value="${c.challengeDays}"></div></div>
+        <p class="small muted">Ejemplo con 2 / 5 / 5: tras el reto, ambos 2 días sin retar ni ser retados; después, el ganador 5 días sin ser retado (puede retar) y el perdedor 5 días sin retar (puede ser retado).</p>
+        <div class="actions"><button class="btn go" data-act="saveLive">Guardar esperas y plazos</button></div></div>
       <div class="card"><h2>Cuadros finales</h2><p class="muted small">Fija la clasificación al terminar la fase de retos. Después marca los ganadores en la pestaña Cuadros.</p>
         <div class="row"><button class="btn go" data-act="freeze" data-on="1">Fijar clasificación final</button><button class="btn danger" data-act="freeze" data-on="0">Liberar</button></div></div>
       <div class="card"><h2>Clave del juez</h2><label for="curPwd">Clave con la que has entrado</label><div class="pwrow"><input id="curPwd" type="password" readonly value="${esc(adminPwd)}"><button class="btn" type="button" data-act="togglePwd" data-target="curPwd" aria-controls="curPwd">Ver</button></div>
@@ -771,11 +808,19 @@
       const i = Number(el.dataset.i), j = i + Number(el.dataset.d), ids = A.players.map((p) => p.id);
       if (j < 0 || j >= ids.length) return; [ids[i], ids[j]] = [ids[j], ids[i]]; adm('order', { ids });
     },
+    setMode(el) {
+      const mode = el.dataset.v; if (mode === A.config.mode) return;
+      if (mode === 'vivo' && !confirm('Se activa el ranking vivo: los resultados moverán el ranking al instante y los retos se abrirán a todos. ¿Seguro?')) return;
+      adm('config', { mode }, mode === 'vivo' ? '⚡ Ranking vivo activado' : 'Modo por periodos activado');
+    },
+    saveLive() {
+      adm('config', { waitBoth: Number($('#wBoth').value), winnerDays: Number($('#wWin').value), loserDays: Number($('#wLose').value), challengeDays: Number($('#wDays').value) }, 'Esperas y plazos guardados');
+    },
     aEdit(el) {
       const c = curPeriod().challenges.find((x) => x.id === el.dataset.id);
       const opts = (sel) => A.players.map((p) => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${p.pos}. ${esc(p.name)}</option>`).join('');
       const who = (sel) => `<option value="" ${!sel ? 'selected' : ''}>— nadie —</option><option value="a" ${sel === c.challenger_id ? 'selected' : ''}>Retador</option><option value="b" ${sel === c.challenged_id ? 'selected' : ''}>Retado</option>`;
-      sheet(`<h2>Editar reto</h2>
+      sheet(`<h2>Editar reto</h2>${A.config.mode === 'vivo' ? '<div class="note small">En ranking vivo el ranking ya se movió al apuntar el resultado. Si lo corriges aquí, ajusta los puestos a mano en Jugadores (▲▼).</div>' : ''}
         <label>Retador</label><select id="eA">${opts(c.challenger_id)}</select><label>Retado</label><select id="eB">${opts(c.challenged_id)}</select>
         <label>Tipo</label><select id="eType"><option value="normal" ${c.type === 'normal' ? 'selected' : ''}>Reto normal</option><option value="inverso" ${c.type === 'inverso' ? 'selected' : ''}>Reto inverso</option></select>
         <label>Estado</label><select id="eSt">${[['pendiente', 'Por jugar'], ['jugado', 'Jugado'], ['sinResultado', 'Sin resultado'], ['noPuede', 'No puede jugar'], ['anulado', 'Anulado']].map(([k, l]) => `<option value="${k}" ${c.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
