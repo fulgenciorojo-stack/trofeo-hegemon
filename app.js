@@ -366,10 +366,20 @@
   // --- Ranking
   function vRank() {
     const q = ui.filter.trim().toLowerCase();
-    const inChal = {}; S.challenges.filter((c) => c.status !== 'anulado').forEach((c) => { inChal[c.a] = c.b; inChal[c.b] = c.a; });
+    const inChal = {}; S.challenges.filter((c) => (isLive() ? c.status === 'pendiente' : c.status !== 'anulado')).forEach((c) => { inChal[c.a] = c.b; inChal[c.b] = c.a; });
     const pchd = new Set(S.prevChallenged);
     const badges = (p) => (S.config.challengeDay === 1 && pchd.has(p.id) ? '<span class="badge p" title="Retado el periodo anterior">P</span>' : '') + (p.down ? '<span class="badge">🔽</span>' : '') +
       (p.blocked ? '<span class="badge">⛔ no retable</span>' : '') + (p.rp ? '<span class="badge">🛡️ RP</span>' : '');
+    const streak = {}, lastMv = {};
+    S.challenges.filter((c) => c.status === 'jugado' && c.winner).sort((x, y) => new Date(x.createdAt || 0) - new Date(y.createdAt || 0)).forEach((c) => {
+      const w = c.winner, l = c.winner === c.a ? c.b : c.a;
+      streak[w] = streak[w] > 0 ? streak[w] + 1 : 1; streak[l] = streak[l] < 0 ? streak[l] - 1 : -1;
+    });
+    (S.movements || []).slice().sort((x, y) => x.id - y.id).forEach((m) => { lastMv[m.name] = m; });
+    const arrow = (p) => { const m = lastMv[p.name]; if (!m || m.from === m.to) return ''; const d = m.from - m.to; return `<span class="delta ${d > 0 ? 'u' : 'd'}" title="${esc(m.reason)}">${d > 0 ? '▲ ' + d : '▼ ' + (-d)}</span>`; };
+    const formLine = (p) => { const k = streak[p.id] || 0;
+      if (k >= 2) return `<small class="form hot"><span class="flame">🔥</span> En racha · ${k} victorias seguidas</small>`;
+      if (k <= -2) return `<small class="form cold">😞 Necesita un cambio de entrenador · ${-k} derrotas seguidas</small>`; return ''; };
     const top = S.players.slice(0, 3);
     const podium = !q && top.length === 3 ? `<div class="podium">${[1, 0, 2].map((i) => { const p = top[i]; return `<div class="pod g${i + 1} ${isMe(p.id) ? 'me' : ''}" data-flip="${p.id}"><div class="medal">${podiumTrophy(i)}</div><div class="num">${p.pos}</div><div class="n">${esc(p.name)}</div>${inChal[p.id] ? '<div class="small" style="color:var(--clay)">⚔️ en reto</div>' : ''}</div>`; }).join('')}</div>` : '';
     let rows = '', lastZone = -1;
@@ -380,7 +390,7 @@
       if (!q && zone !== lastZone) { lastZone = zone; rows += `<div class="zone">${zone === 0 ? 'Zona Trofeo Hegemón · 1–16' : `${zone + 1}.ª división · ${zone * 16 + 1}–${zone * 16 + 16}`}</div>`; }
       const st = isLive() ? (inChal[p.id] ? { k: 'reto', icon: '⚔️', label: 'En reto', tip: 'Tiene un reto en juego' } : stageOf(p)) : null;
       rows += `<div class="rrow ${isMe(p.id) ? 'me' : ''} ${inChal[p.id] ? 'inchal' : ''}" data-flip="${p.id}"><div class="num">${p.pos}</div>
-        <div class="nm">${esc(p.name)}${badges(p)}${inChal[p.id] ? `<small>⚔️ vs ${esc(nm(inChal[p.id]))}</small>` : st && st.k !== 'libre' ? `<small class="stg st-${st.k}">${esc(stageLine(st))}</small>` : ''}</div>${st ? `<div class="rst" title="${esc(st.label + ' · ' + st.tip)}">${st.icon}</div>` : ''}</div>`;
+        <div class="nm">${esc(p.name)}${arrow(p)}${badges(p)}${formLine(p)}${inChal[p.id] ? `<span class="vspill"><i>⚔️</i> EN RETO · vs ${esc(nm(inChal[p.id]))}</span>` : st && st.k !== 'libre' ? `<small class="stg st-${st.k}">${esc(stageLine(st))}</small>` : ''}</div>${st ? `<div class="rst" title="${esc(st.label + ' · ' + st.tip)}">${st.icon}</div>` : ''}</div>`;
     });
     const c0 = S.config, hr = String(c0.refreshHour == null ? 7 : c0.refreshHour).padStart(2, '0') + ':00';
     const legend = isLive() ? `<details class="legend card"><summary>ℹ️ Qué significan los símbolos</summary>
