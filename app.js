@@ -333,7 +333,7 @@
     else if (mine && c.status === 'jugado' && c.reportedBy === me.id) acts = `<div class="row" style="margin-top:12px"><button class="btn" data-act="resultSheet" data-id="${c.id}">✏️ Corregir resultado</button></div>`;
     const dl = isLive() && c.status === 'pendiente' && c.deadline ? `<div class="small muted" style="margin-top:8px">⏱ Plazo para jugar: hasta el ${esc(fmtTs(c.deadline))}</div>` : '';
     const body = `${c.score ? `<div class="score">${esc(c.score)}</div>` : ''}${dl}${mine && c.status === 'pendiente' ? steps(c) : ''}${acts}`;
-    const when = c.createdAt ? `<div class="dwhen"><span>Lanzado ${esc(fmtTs(c.createdAt))}</span>${idx != null ? `<b>Nº ${idx + 1}</b>` : ''}</div>` : '';
+    const when = c.createdAt ? `<div class="dwhen"><span title="${esc(fmtTs(c.createdAt))}">Lanzado ${esc(ago(c.createdAt))}</span>${idx != null ? `<b>Nº ${idx + 1}</b>` : ''}</div>` : '';
     return `<div class="duel st-${c.status} ${mine ? 'mine' : ''}" ${idx != null ? `style="--ac:${DUEL_AC[idx % DUEL_AC.length]}"` : ''}><div class="tag"><span>${mine ? '⭐ Tu reto · ' : ''}${typeTxt}</span><span class="pill ${c.status}">${label}</span></div>
       <div class="vsrow">${f(c.a, c.pa, 'l')}<div class="vsb">VS</div>${f(c.b, c.pb, 'r')}</div>
       ${body ? `<div class="body">${body}</div>` : ''}${when}</div>`;
@@ -633,7 +633,7 @@
       normal: 'Puedes retar a cualquiera de los 5 jugadores libres por encima de ti.',
       extendido: 'Los 5 de arriba no están disponibles: puedes retar al siguiente libre. Si pierdes, bajarás más puestos.',
       inverso: 'No hay nadie libre por encima: <b>reto inverso</b>. Retas al primero libre por debajo. Si ganas subes 1; si pierdes, intercambias puesto.',
-      none: 'Ahora mismo no hay nadie libre al que puedas retar. Vuelve a mirar más tarde o avisa al juez: puede emparejarte a mano.',
+      none: 'Ahora mismo no hay nadie libre al que puedas retar: están en otro reto, en espera o ya jugaste contra ellos hace poco. Vuelve a mirar más tarde o avisa al juez.',
     }[o.mode];
     const ok = o.rows.filter((r) => r.ok), no = o.rows.filter((r) => !r.ok);
     sheet(`<h2>¿A quién retas?</h2><div class="note">${intro}</div>
@@ -776,7 +776,8 @@
           <div style="flex:1;min-width:130px"><label for="wWin">Ganador sin ser retado (después)</label><input id="wWin" type="number" min="0" max="60" value="${c.winnerDays}"></div></div>
         <div class="row"><div style="flex:1;min-width:130px"><label for="wLose">Perdedor sin retar (después)</label><input id="wLose" type="number" min="0" max="60" value="${c.loserDays}"></div>
           <div style="flex:1;min-width:130px"><label for="wDays">Plazo para jugar un reto</label><input id="wDays" type="number" min="3" max="60" value="${c.challengeDays}"></div></div>
-        <div class="row"><div style="flex:1;min-width:130px"><label for="wHour">Hora de actualización diaria (0-23)</label><input id="wHour" type="number" min="0" max="23" value="${c.refreshHour == null ? 7 : c.refreshHour}"></div></div>
+        <div class="row"><div style="flex:1;min-width:130px"><label for="wHour">Hora de actualización diaria (0-23)</label><input id="wHour" type="number" min="0" max="23" value="${c.refreshHour == null ? 7 : c.refreshHour}"></div>
+          <div style="flex:1;min-width:130px"><label for="wPair">Días sin repetir rival</label><input id="wPair" type="number" min="0" max="90" value="${c.pairDays == null ? 15 : c.pairDays}"></div></div>
         <p class="small muted">Las esperas terminan siempre a la hora de actualización diaria (por defecto las 07:00) y ese día se avisa a quien cambia de fase. Ejemplo con 2 / 5 / 5: tras el reto, ambos 2 días sin retar ni ser retados; después, el ganador 5 días sin ser retado (puede retar) y el perdedor 5 días sin retar (puede ser retado).</p>
         <div class="actions"><button class="btn go" data-act="saveLive">Guardar esperas y plazos</button></div></div>
       <div class="card"><h2>Copia de seguridad</h2><p class="muted small">Descarga todos los datos del torneo (jugadores, PIN, teléfonos, retos y movimientos). Guárdala en un sitio privado: contiene datos personales.</p>
@@ -1006,7 +1007,7 @@
       adm('config', { mode }, mode === 'vivo' ? '⚡ Ranking vivo activado' : 'Modo por periodos activado');
     },
     saveLive() {
-      adm('config', { waitBoth: Number($('#wBoth').value), winnerDays: Number($('#wWin').value), loserDays: Number($('#wLose').value), challengeDays: Number($('#wDays').value), refreshHour: Number($('#wHour').value) }, 'Esperas y plazos guardados');
+      adm('config', { waitBoth: Number($('#wBoth').value), winnerDays: Number($('#wWin').value), loserDays: Number($('#wLose').value), challengeDays: Number($('#wDays').value), refreshHour: Number($('#wHour').value), pairDays: Number($('#wPair').value) }, 'Esperas y plazos guardados');
     },
     aEdit(el) {
       const c = curPeriod().challenges.find((x) => x.id === el.dataset.id);
