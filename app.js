@@ -631,13 +631,13 @@
     if (o.error) return sheet(`<h2>No puedes retar ahora</h2><div class="note bad">${esc(o.error)}</div><div class="actions">${cancel}</div>`);
     const intro = {
       normal: 'Puedes retar a cualquiera de los 5 jugadores libres por encima de ti.',
-      extendido: 'Los 5 de arriba no están disponibles: puedes retar al siguiente libre. Si pierdes, bajarás más puestos.',
+      extendido: 'Los 5 de arriba no están disponibles. Puedes retar al siguiente jugador libre (hasta 10 puestos por encima), pero <b>te la juegas</b>: si pierdes, la penalización es mayor que la normal. Tú decides.',
       inverso: 'No hay nadie libre por encima: <b>reto inverso</b>. Retas al primero libre por debajo. Si ganas subes 1; si pierdes, intercambias puesto.',
       none: 'Ahora mismo no hay nadie libre al que puedas retar: están en otro reto, en espera o ya jugaste contra ellos hace poco. Vuelve a mirar más tarde o avisa al juez.',
     }[o.mode];
     const ok = o.rows.filter((r) => r.ok), no = o.rows.filter((r) => !r.ok);
     sheet(`<h2>¿A quién retas?</h2><div class="note">${intro}</div>
-      ${ok.map((r) => `<button class="cand" data-act="confirmChallenge" data-id="${r.id}" data-name="${esc(r.name)}" data-pos="${r.pos}" data-dist="${r.dist}" data-dir="${r.dir}" data-pen="${r.penalty || ''}"><span class="num">${r.pos}</span><span class="nm">${esc(r.name)}<small>${r.dir === 'up' ? `${r.dist} ${r.dist === 1 ? 'puesto' : 'puestos'} por encima${r.dist > 5 ? ` · si pierdes bajas ${r.penalty}` : ''}` : 'por debajo · reto inverso'}</small></span><span>⚔️</span></button>`).join('')}
+      ${ok.map((r) => `<button class="cand" data-act="confirmChallenge" data-id="${r.id}" data-name="${esc(r.name)}" data-pos="${r.pos}" data-dist="${r.dist}" data-dir="${r.dir}" data-pen="${r.penalty || ''}"><span class="num">${r.pos}</span><span class="nm">${esc(r.name)}<small>${r.dir === 'up' ? `${r.dist} ${r.dist === 1 ? 'puesto' : 'puestos'} por encima${r.dist > 5 ? ` · <b class="riskx">⚠️ si pierdes bajas ${r.penalty} (${r.penalty - 2} más de lo normal)</b>` : ''}` : 'por debajo · reto inverso'}</small></span><span>⚔️</span></button>`).join('')}
       ${no.length ? `<h3>No disponibles</h3>${no.map((r) => `<button class="cand" disabled><span class="num">${r.pos}</span><span class="nm">${esc(r.name)}<small>${esc(r.reason || '')}</small></span></button>`).join('')}` : ''}
       <div class="actions">${cancel}</div>`);
   }
@@ -646,7 +646,7 @@
     const d = el.dataset, mp = P()[me.id];
     sheet(`<h2>Confirma tu reto</h2>
       <div class="vsrow" style="margin:18px 0"><div class="fighter l"><div class="p">#${mp.pos}</div><div class="n">${esc(mp.name)}</div></div><div class="vsb">VS</div><div class="fighter r"><div class="p">#${d.pos}</div><div class="n">${esc(d.name)}</div></div></div>
-      <ul class="log small muted"><li>Si ganas ${d.dir === 'up' ? 'ocupas su puesto' : 'subes 1 puesto'}.</li><li>Si pierdes ${d.dir === 'up' ? `bajas ${d.pen || 2} puestos` : 'intercambiáis puestos'}.</li><li>Tras retar debes avisar al grupo y por privado a ${esc(firstName(d.name))}.</li></ul>
+      <ul class="log small muted"><li>Si ganas ${d.dir === 'up' ? 'ocupas su puesto' : 'subes 1 puesto'}.</li><li>Si pierdes ${d.dir === 'up' ? `bajas ${d.pen || 2} puestos${Number(d.pen) > 2 ? ` — <b class="riskx">${Number(d.pen) - 2} más de la penalización normal (2) por retar a ${d.dist} puestos</b>` : ''}` : 'intercambiáis puestos'}.</li><li>Tras retar debes avisar al grupo y por privado a ${esc(firstName(d.name))}.</li></ul>
       <div class="actions">${cancel}<button class="btn hot big" data-act="doChallenge" data-id="${d.id}">¡Lanzar reto!</button></div>`);
   }
 

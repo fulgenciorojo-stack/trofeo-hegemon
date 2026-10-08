@@ -420,3 +420,5 @@ nav button.locked .lk { position: absolute; top: 3px; right: calc(50% - 22px); c
 .news.full .news-line{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;font-size:13px;color:#c3d6ca;margin:5px 0 0}
 .news.full .news-q{margin-top:7px;padding:8px 11px;font-size:15px;line-height:1.35;color:#f2fff6;background:rgba(0,0,0,.32)}
 .news.full .news-q b{font-size:12px}.news.full .news-cta{margin-top:7px}
+
+.riskx{color:#ffb347;font-weight:700}
